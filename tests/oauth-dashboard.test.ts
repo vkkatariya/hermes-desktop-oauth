@@ -157,7 +157,9 @@ describe("oauthDashboardLogin", () => {
   it("resolves with error when window is closed before cookies arrive", async () => {
     const { oauthDashboardLogin } = await loadOAuth();
 
-    const loginPromise = oauthDashboardLogin("http://hermes.local", "default");
+    // 127.0.0.1:1 fails fast with ECONNREFUSED, so getAuthProviders resolves
+    // immediately with the ["nous"] fallback
+    const loginPromise = oauthDashboardLogin("http://127.0.0.1:1", "default");
     await new Promise((r) => setTimeout(r, 10));
 
     fireWinEvent("closed");
@@ -165,7 +167,7 @@ describe("oauthDashboardLogin", () => {
     const result = await loginPromise;
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/closed/i);
-  });
+  }, 10000);
 });
 
 describe("mintGatewayWsTicket", () => {
