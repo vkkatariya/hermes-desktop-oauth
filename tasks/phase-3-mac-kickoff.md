@@ -46,18 +46,33 @@ npm ci
 #   # Or check tasks/audits/phase-2-test-rerun.md for the full Electron install dance.
 
 npm run build:mac
-# Output: dist/mac/Hermes.app and dist/Hermes-0.6.34.dmg (or similar)
+# Output: dist/hermes-desktop-0.6.34-arm64.dmg (NOT dist/Hermes-0.6.34.dmg)
+# App bundle: dist/mac-arm64/Hermes One.app (note: "Hermes One" with space)
+#
+# EXPECTED WARNING (safe to ignore on dev machines):
+#   "falling back to ad-hoc signature for macOS application code signing"
+#   "skipped macOS notarization reason=notarize options were unable to be generated"
+# This just means you don't have an Apple Developer cert configured. The .dmg
+# still installs fine. First launch may show Gatekeeper "unidentified developer"
+# warning — control-click the .dmg → Open to bypass.
 ```
 
 ## Step 3 — Install the .dmg
 
 ```bash
-open dist/Hermes-0.6.34.dmg
-# Drag Hermes.app to /Applications
-# (or run from dist/mac/ directly if you don't want to install)
+# CORRECT filename (electron-builder names it "hermes-desktop", not "Hermes"):
+open dist/hermes-desktop-0.6.34-arm64.dmg
+
+# A Finder window opens with "Hermes One.app" — drag to /Applications
+# Or run directly without installing:
+open dist/mac-arm64/Hermes\ One.app
+
+# Launch Hermes.app from /Applications (or the path you installed to).
 ```
 
 Launch Hermes.app.
+
+> **Gatekeeper bypass:** On first launch, macOS may say "Hermes One.app cannot be opened because the developer cannot be verified". Control-click the app icon → Open → Open in the dialog. This is the standard bypass for ad-hoc-signed apps.
 
 ## Step 4 — Connect to the gated dashboard
 
