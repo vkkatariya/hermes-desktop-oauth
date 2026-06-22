@@ -186,7 +186,6 @@ export default {
   remoteErrorRequiredSimple: "Lütfen bir URL girin",
   remoteErrorFailedSimple: "Sunucuya ulaşılamadı",
   apiGenerated: "API anahtarı oluşturuldu — gateway yeniden başlatılıyor…",
-  apiGenerated: "API key generated — gateway restarting…",
   authModeLabel: "Authentication mode",
   authModeToken: "API token",
   authModeOAuth: "OAuth (browser)",
