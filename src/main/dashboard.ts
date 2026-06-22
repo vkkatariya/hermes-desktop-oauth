@@ -7,6 +7,7 @@ import net from "net";
 import { homedir } from "os";
 import { join } from "path";
 import { getConnectionConfig, type ConnectionConfig } from "./config";
+import { freshGatewayWsUrl } from "./oauth";
 import {
   getEnhancedPath,
   hermesCliArgs,
@@ -43,6 +44,8 @@ export interface DashboardConnection {
   port?: number;
   logPath?: string;
   alreadyRunning?: boolean;
+  authMode?: "token" | "oauth";
+  oauthProfile?: string;
 }
 
 export interface DashboardStatus {
@@ -99,13 +102,16 @@ export function remoteDashboardConnectionFromConfig(
   if (config.mode !== "remote") return null;
   const baseUrl = normalizeRemoteDashboardBaseUrl(config.remoteUrl);
   const token = config.apiKey.trim();
-  if (!baseUrl || !token) return null;
+  if (!baseUrl) return null;
+  if (!token && config.authMode !== "oauth") return null;
   return {
     baseUrl,
-    wsUrl: dashboardWsUrl(baseUrl, token),
+    wsUrl: token ? dashboardWsUrl(baseUrl, token) : "",
     token,
     mode: "remote",
     profile: resolveProfile(profile),
+    authMode: config.authMode ?? "token",
+    oauthProfile: resolveProfile(profile) ?? "default",
   };
 }
 
@@ -382,11 +388,34 @@ async function getRemoteDashboardStatusForConfig(
       connection.token,
     );
     if (dashboardStatusRequiresOAuth(status)) {
+      if (config.authMode === "oauth" && config.oauth?.cookiesReady) {
+        const oauthProfile = resolveProfile(profile) ?? "default";
+        try {
+          const wsUrl = await freshGatewayWsUrl(connection.baseUrl, oauthProfile);
+          const oauthConn: DashboardConnection = {
+            ...connection,
+            wsUrl,
+            authMode: "oauth",
+            oauthProfile,
+          };
+          await probeDashboardWebSocket(oauthConn);
+          return { supported: true, running: true, connection: oauthConn };
+        } catch (err) {
+          return {
+            supported: true,
+            running: false,
+            connection,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }
       return {
         supported: true,
         running: false,
         error:
-          "Remote dashboard requires OAuth browser authentication. Token-based remote dashboard is supported now; OAuth ticket flow is not wired in Hermes One yet.",
+          config.authMode === "oauth"
+            ? "Dashboard requires OAuth sign-in. Use the Sign in button in Settings."
+            : "Remote dashboard requires OAuth authentication. Switch to OAuth mode in Settings.",
       };
     }
 
@@ -461,7 +490,7 @@ async function getSshDashboardStatusForConfig(
         running: false,
         connection,
         error:
-          "SSH dashboard requires OAuth browser authentication. Token-based dashboard over SSH is supported now; OAuth ticket flow is not wired in Hermes One yet.",
+          "SSH dashboard requires OAuth browser authentication. OAuth over SSH is not yet supported; use direct remote mode for OAuth.",
       };
     }
 

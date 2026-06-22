@@ -247,6 +247,14 @@ interface HermesAPI {
   ) => Promise<{ success: boolean; error?: string }>;
   cancelOAuthLogin: () => Promise<boolean>;
   onOAuthLoginProgress: (callback: (chunk: string) => void) => () => void;
+  oauthDashboardLogin: (
+    baseUrl: string,
+    profile?: string,
+  ) => Promise<{ ok: boolean; error?: string; email?: string }>;
+  oauthDashboardStatus: (
+    profile?: string,
+  ) => Promise<{ cookiesReady: boolean; lastLoginAt?: number; lastLoginEmail?: string }>;
+  oauthDashboardLogout: (profile?: string) => Promise<void>;
 
   getLocale: () => Promise<AppLocale>;
   setLocale: (locale: AppLocale) => Promise<AppLocale>;
@@ -318,11 +326,18 @@ interface HermesAPI {
       remotePort: number;
       localPort: number;
     };
+    authMode?: "token" | "oauth";
+    oauth?: {
+      lastLoginAt?: number;
+      lastLoginEmail?: string;
+      cookiesReady: boolean;
+    };
   }>;
   setConnectionConfig: (
     mode: "local" | "remote" | "ssh",
     remoteUrl: string,
     apiKey?: string,
+    authMode?: "token" | "oauth",
   ) => Promise<boolean>;
   setConnectionChatTransports: (
     remoteChatTransport: "auto" | "dashboard" | "legacy",
@@ -343,6 +358,12 @@ interface HermesAPI {
         keyPath: string;
         remotePort: number;
         localPort: number;
+      };
+      authMode?: "token" | "oauth";
+      oauth?: {
+        lastLoginAt?: number;
+        lastLoginEmail?: string;
+        cookiesReady: boolean;
       };
     }) => void,
   ) => () => void;
