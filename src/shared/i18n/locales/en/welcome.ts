@@ -21,4 +21,8 @@ export default {
   connect: "Connect",
   remoteHint:
     "Leave the key empty if the server accepts unauthenticated requests (e.g. via SSH tunnel to localhost).",
+  authModeLabel: "Authentication mode",
+  authModeToken: "API token",
+  authModeOAuth: "OAuth (browser)",
+  oauthLoginButton: "Sign in with browser",
 } as const;

@@ -20,4 +20,8 @@ export default {
   connect: "连接",
   remoteHint:
     "如果服务器接受未认证的请求（如通过 SSH 隧道到 localhost），请留空密钥。",
+  authModeLabel: "Authentication mode",
+  authModeToken: "API token",
+  authModeOAuth: "OAuth (browser)",
+  oauthLoginButton: "Sign in with browser",
 } as const;

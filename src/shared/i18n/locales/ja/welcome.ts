@@ -21,4 +21,8 @@ export default {
   connect: "接続",
   remoteHint:
     "サーバが認証なしリクエストを受け付ける（例：SSH トンネル経由で localhost）場合はキーを空欄に。",
+  authModeLabel: "Authentication mode",
+  authModeToken: "API token",
+  authModeOAuth: "OAuth (browser)",
+  oauthLoginButton: "Sign in with browser",
 } as const;

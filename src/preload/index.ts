@@ -160,6 +160,19 @@ const hermesAPI = {
     return () => ipcRenderer.removeListener("oauth-login-progress", handler);
   },
 
+  // Dashboard OAuth — browser-based sign-in for OAuth-gated remote dashboards
+  oauthDashboardLogin: (
+    baseUrl: string,
+    profile?: string,
+  ): Promise<{ ok: boolean; error?: string; email?: string }> =>
+    ipcRenderer.invoke("oauth-dashboard-login", baseUrl, profile),
+  oauthDashboardStatus: (
+    profile?: string,
+  ): Promise<{ cookiesReady: boolean; lastLoginAt?: number; lastLoginEmail?: string }> =>
+    ipcRenderer.invoke("oauth-dashboard-status", profile),
+  oauthDashboardLogout: (profile?: string): Promise<void> =>
+    ipcRenderer.invoke("oauth-dashboard-logout", profile),
+
   getLocale: (): Promise<AppLocale> => ipcRenderer.invoke("get-locale"),
   setLocale: (locale: AppLocale): Promise<AppLocale> =>
     ipcRenderer.invoke("set-locale", locale),
@@ -257,14 +270,21 @@ const hermesAPI = {
       remotePort: number;
       localPort: number;
     };
+    authMode?: "token" | "oauth";
+    oauth?: {
+      lastLoginAt?: number;
+      lastLoginEmail?: string;
+      cookiesReady: boolean;
+    };
   }> => ipcRenderer.invoke("get-connection-config"),
 
   setConnectionConfig: (
     mode: "local" | "remote" | "ssh",
     remoteUrl: string,
     apiKey?: string,
+    authMode?: "token" | "oauth",
   ): Promise<boolean> =>
-    ipcRenderer.invoke("set-connection-config", mode, remoteUrl, apiKey),
+    ipcRenderer.invoke("set-connection-config", mode, remoteUrl, apiKey, authMode),
 
   setConnectionChatTransports: (
     remoteChatTransport: "auto" | "dashboard" | "legacy",
@@ -292,6 +312,12 @@ const hermesAPI = {
         remotePort: number;
         localPort: number;
       };
+      authMode?: "token" | "oauth";
+      oauth?: {
+        lastLoginAt?: number;
+        lastLoginEmail?: string;
+        cookiesReady: boolean;
+      };
     }) => void,
   ): (() => void) => {
     const handler = (
@@ -313,6 +339,12 @@ const hermesAPI = {
             keyPath: string;
             remotePort: number;
             localPort: number;
+          };
+          authMode?: "token" | "oauth";
+          oauth?: {
+            lastLoginAt?: number;
+            lastLoginEmail?: string;
+            cookiesReady: boolean;
           };
         },
       );

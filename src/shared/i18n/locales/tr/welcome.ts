@@ -21,4 +21,8 @@ export default {
   connect: "Bağlan",
   remoteHint:
     "Sunucu kimlik doğrulamasız istekleri kabul ediyorsa (örn. SSH tüneli ile localhost) anahtarı boş bırakın.",
+  authModeLabel: "Authentication mode",
+  authModeToken: "API token",
+  authModeOAuth: "OAuth (browser)",
+  oauthLoginButton: "Sign in with browser",
 } as const;

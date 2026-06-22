@@ -21,4 +21,8 @@ export default {
   connect: "Hubungkan",
   remoteHint:
     "Biarkan key kosong jika server menerima request tanpa autentikasi (misalnya melalui SSH tunnel ke localhost).",
+  authModeLabel: "Authentication mode",
+  authModeToken: "API token",
+  authModeOAuth: "OAuth (browser)",
+  oauthLoginButton: "Sign in with browser",
 } as const;

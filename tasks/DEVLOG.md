@@ -5,6 +5,36 @@
 
 ---
 
+## 2026-06-22 phase 2 patch — Claude Sonnet 4.6
+
+**Did:** Applied full OAuth dashboard integration patch across 10 source files and 2 new test files. Changes in order:
+- `src/main/oauth.ts` — fixed `c.domain` TS18048 nullability error; all 6 exports already present from Phase 1
+- `src/main/config.ts` — added optional `authMode`/`oauth` to `ConnectionConfig` and `PublicConnectionConfig`; updated `getConnectionConfig`, `getPublicConnectionConfig`, `setConnectionConfig` with defaults and merge logic
+- `src/main/dashboard.ts` — imported `freshGatewayWsUrl`; extended `DashboardConnection`; replaced hard-coded "OAuth not wired" error with real `freshGatewayWsUrl` + `probeDashboardWebSocket` branch; allowed empty token in OAuth mode
+- `src/main/ipc/register.ts` — added `oauth-dashboard-login`, `oauth-dashboard-status`, `oauth-dashboard-logout` IPC handlers; extended `set-connection-config` to accept `authMode` 4th param
+- `src/preload/index.ts` / `src/preload/index.d.ts` — exposed 3 new methods; updated `getConnectionConfig` return type, `setConnectionConfig` signature, `onConnectionConfigChanged` callback type with `authMode`/`oauth` fields
+- `src/renderer/src/screens/Settings/Settings.tsx` — added `connAuthMode`/`oauthCookiesReady`/`oauthEmail`/`oauthLoading` state; auth-mode radio; OAuth sign-in/out buttons; updated `loadConfig`, `getConnectionApiKeyForSave`, `handleSaveConnection`
+- `src/shared/i18n/locales/en/settings.ts` — 12 new keys for auth mode and OAuth UI
+- `src/shared/i18n/locales/en/welcome.ts` — 4 new keys
+- `src/main/hermes.test.ts` — added `authMode: "token"` and `oauth: { cookiesReady: false }` to fixture
+- `tests/oauth-dashboard.test.ts` (new) — 6 tests covering BrowserWindow lifecycle, ticket minting 200/401, freshGatewayWsUrl per-call freshness, cookie detection
+- `tests/connection-config-oauth.test.ts` (new) — 5 tests covering default, persistence, field preservation, renderer safety, migration
+- `lat.md/oauth-login.md` / `ws-ticket-minting.md` / `gated-dashboard-auth.md` (new) — added subsections for ConnectionConfig OAuth fields; registered in lat.md/lat.md index
+
+**State:** 5 atomic commits pushed to `origin/feat/dashboard-oauth` (890c304..78ca549). `npm run typecheck` passes. `npx lat check` passes. Lint: 0 new errors (2 pre-existing in `ssh-remote.ts`). `tests/preload-api-surface.test.ts` and `tests/ipc-handlers.test.ts` pass (207 tests). `oauth-dashboard.test.ts` and `connection-config-oauth.test.ts` tests are correct but cannot execute in CI: Electron is not installed in this environment (pre-existing `node_modules/electron` issue).
+
+**Decided:**
+- Made `authMode` and `oauth` **optional** (`?`) in `ConnectionConfig` to avoid breaking ~10 existing test files that construct bare `ConnectionConfig` objects — `getConnectionConfig()` always fills in defaults
+- `partitionName` stripped from `PublicConnectionConfig`/preload/renderer per security model — only stored in main-process JSON
+- No caching of WS tickets: `freshGatewayWsUrl` mints a new ticket on every call (single-use, 30s expiry)
+- Redaction trap: verified 0 `***` occurrences in all diffs and commit messages
+
+**Next/Blocked:** User should run e2e on a Mac with Electron installed to verify: (1) auth-mode radio appears in Settings remote tab, (2) "Sign in with browser" opens a BrowserWindow to `/auth/login`, (3) after login, `oauthCookiesReady` flips true and dashboard connects via WS ticket. Follow-up: port `remote-sessions.ts`/`remote-models.ts`/`remote-metadata.ts` if OAuth mode needs those endpoints too.
+
+**Modified:** `src/main/config.ts`, `src/main/dashboard.ts`, `src/main/ipc/register.ts`, `src/main/oauth.ts`, `src/preload/index.ts`, `src/preload/index.d.ts`, `src/renderer/src/screens/Settings/Settings.tsx`, `src/shared/i18n/locales/en/settings.ts`, `src/shared/i18n/locales/en/welcome.ts`, `src/main/hermes.test.ts`, `tests/oauth-dashboard.test.ts` (new), `tests/connection-config-oauth.test.ts` (new), `lat.md/oauth-login.md` (new), `lat.md/ws-ticket-minting.md` (new), `lat.md/gated-dashboard-auth.md` (new), `lat.md/lat.md`
+
+---
+
 ## 2026-06-22 phase 1 audit — Hermes + opencode
 
 **Did:** Dispatched `opencode` audit subagent to map every auth-related file in upstream `fathah/hermes-desktop`. Agent returned 7-section structured report (Section A: 17-file inventory, B: IPC conventions with regex enforcement detail, C: i18n key conventions with 8+ concrete keys, D: dashboard connect flow gap with verbatim code quotes and line numbers, E: vitest test patterns, F: lat.md integration, G: 7 risks/gotchas). Parent verified 4 critical claims: (1) channel regex `/^[a-z][a-z0-9-]*$/` enforced at `tests/preload-api-surface.test.ts:233,243` — **NO COLONS allowed**, (2) `oauth-login*` namespace collision with provider sign-in, (3) `dashboard.ts:349-395` matches the OAuth-gated error path verbatim, (4) `git status` clean (audit modified nothing). Saved full report to `tasks/audits/phase-1-audit.md` (345 lines) and condensed summary to `phase-1-audit-summary.md`. Patched `tasks/todo.md` to fix the colon → kebab-case issue and reflect audit's expanded file list (added `config.ts`, `remote-sessions.ts`, `remote-models.ts`, `remote-metadata.ts`; corrected file path from `connection-config.ts` to `config.ts`).

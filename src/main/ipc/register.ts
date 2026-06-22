@@ -18,6 +18,7 @@ import { checkInstallStatus, verifyInstall, runInstall, inspectInstallTarget, va
 import { ensureLocalDashboardCompatibility, ensureSshDashboardCompatibility } from "../hermes-agent-compat";
 import { addMcpServer, installMcpCatalogEntry, listMcpCatalog, listMcpServers, removeMcpServer, setMcpServerEnabled, testMcpServer, type McpServerInput } from "../mcp-servers";
 import { runHermesAuthLogin, cancelHermesAuthLogin, detectDeviceCode } from "../hermes-auth";
+import { oauthDashboardLogin, clearOAuthSession, hasOAuthSessionCookies } from "../oauth";
 import { isRemoteMode, isRemoteOnlyMode, sendMessage, transcribeAudio, startGateway, startGatewayDetailed, stopGateway, isGatewayRunning, testRemoteConnection, restartGateway, notifyProfileSwitched, ensureSshTunnelIfNeeded, setSshRemoteApiKey, getRemoteAuthHeader, resolvePendingClarify } from "../hermes";
 import { getDashboardStatus, startDashboard, stopDashboard } from "../dashboard";
 import { startSshTunnel, ensureSshTunnel, getSshTunnelUrl, stopSshTunnel, testSshConnection, isSshTunnelActive, isSshTunnelHealthy } from "../ssh-tunnel";
@@ -310,6 +311,68 @@ export function registerIpcHandlers(context: IpcContext): void {
     );
   });
   ipcMain.handle("oauth-login-cancel", () => cancelHermesAuthLogin());
+
+  // Dashboard OAuth — browser-based sign-in for OAuth-gated remote dashboards.
+  ipcMain.handle(
+    "oauth-dashboard-login",
+    async (_event, baseUrl: string, profile?: string) => {
+      const result = await oauthDashboardLogin(baseUrl, profile ?? "default");
+      if (result.ok) {
+        const config = getConnectionConfig();
+        setConnectionConfig({
+          ...config,
+          oauth: {
+            ...(config.oauth ?? { cookiesReady: false }),
+            cookiesReady: true,
+            lastLoginAt: Date.now(),
+            lastLoginEmail: result.email,
+          },
+        });
+        notifyConnectionConfigChanged();
+      }
+      return result;
+    },
+  );
+  ipcMain.handle(
+    "oauth-dashboard-status",
+    async (_event, profile?: string) => {
+      const config = getConnectionConfig();
+      const cookiesReady = config.remoteUrl
+        ? await hasOAuthSessionCookies(config.remoteUrl, profile ?? "default")
+        : false;
+      if (cookiesReady !== (config.oauth?.cookiesReady ?? false)) {
+        setConnectionConfig({
+          ...config,
+          oauth: { ...(config.oauth ?? { cookiesReady: false }), cookiesReady },
+        });
+        notifyConnectionConfigChanged();
+      }
+      return {
+        cookiesReady,
+        lastLoginAt: config.oauth?.lastLoginAt,
+        lastLoginEmail: config.oauth?.lastLoginEmail,
+      };
+    },
+  );
+  ipcMain.handle(
+    "oauth-dashboard-logout",
+    async (_event, profile?: string) => {
+      const config = getConnectionConfig();
+      if (config.remoteUrl) {
+        await clearOAuthSession(config.remoteUrl, profile ?? "default");
+      }
+      setConnectionConfig({
+        ...config,
+        oauth: {
+          ...(config.oauth ?? { cookiesReady: false }),
+          cookiesReady: false,
+          lastLoginAt: undefined,
+          lastLoginEmail: undefined,
+        },
+      });
+      notifyConnectionConfigChanged();
+    },
+  );
 
   // Configuration (profile-aware)
   ipcMain.handle("get-locale", () => getAppLocale());
@@ -620,6 +683,7 @@ export function registerIpcHandlers(context: IpcContext): void {
       mode: "local" | "remote" | "ssh",
       remoteUrl: string,
       apiKey?: string,
+      authMode?: "token" | "oauth",
     ) => {
       const existing = getConnectionConfig();
       setConnectionConfig({
@@ -632,6 +696,7 @@ export function registerIpcHandlers(context: IpcContext): void {
           remoteUrl,
           apiKey,
         ),
+        ...(authMode !== undefined ? { authMode } : {}),
       });
       notifyConnectionConfigChanged();
       return true;
