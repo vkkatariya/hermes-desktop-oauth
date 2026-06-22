@@ -81,10 +81,12 @@
 
 ### Phase 2 gaps → follow-up before Phase 4 (upstream PR)
 
-1. **`src/main/remote-sessions.ts` OAuth support** — `RemoteSessionConfig` still token-only. Affects `remote-models.ts` + `remote-metadata.ts` callers. Two paths: extend `RemoteSessionConfig` with `authMode` + `oauthProfile` and have `remoteRequestJson` mint a ticket when needed, OR keep these as token-only and require dashboard flow for OAuth users. Decide before upstream PR.
-2. **`needs_oauth_login` return shape** — Claude's `{supported, running, error}` shape covers the case implicitly but doesn't match todo.md's literal `needs_oauth_login` boolean. Either add the boolean to the return type (small, additive) or accept the implicit form.
+1. ✅ **`src/main/remote-sessions.ts` OAuth support** — `RemoteSessionConfig` now has optional `authMode` and `oauthProfile`. When `authMode === "oauth"`, `remoteRequestJson` mints a single-use ticket per call (via `oauth.ts mintGatewayWsTicket`) and passes it as `?ticket=` query param. Token mode unchanged. `oauthProfile` falls back to `"default"`. Raw HTTP transport extracted into private `rawRemoteRequestJson` helper. Test: `tests/remote-sessions-oauth.test.ts` (3 tests, all pass). Committed `77ac0f9`.
+2. ✅ **`needs_oauth_login` return shape** — `DashboardStatus` gained optional `needs_oauth_login: boolean`. Set in both OAuth return paths inside `getRemoteDashboardStatusForConfig`. Type mirrored in preload/index.{ts,d.ts}. Test: `tests/dashboard-needs-oauth-login.test.ts` (2 tests, all pass). Committed `77ac0f9`.
 3. **`npm run build` (full)** — typecheck passes, tests pass, but `electron-vite build` was not exercised in this sandbox. Run on Mac during Phase 3 setup (3.2).
 4. **Branch name** — todo.md still says `feat/oauth-ticket-flow` in 3 places. Decide: rename `feat/dashboard-oauth` → `feat/oauth-ticket-flow` (cosmetic, clean), or accept the divergence and update todo (default).
+
+> **Gap closures verified:** 17/17 OAuth-related tests pass (`tests/oauth-dashboard.test.ts` × 7, `tests/connection-config-oauth.test.ts` × 5, `tests/dashboard-needs-oauth-login.test.ts` × 2, `tests/remote-sessions-oauth.test.ts` × 3). Existing `tests/remote-sessions.test.ts` (11 tests) and `tests/dashboard-remote.test.ts` pass with no regressions. Typecheck clean.
 
 ## Phase 3: End-to-end verify (Mac)
 
