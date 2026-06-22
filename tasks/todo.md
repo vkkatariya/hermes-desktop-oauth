@@ -11,37 +11,41 @@
 - [x] Push `main` branch (initial commit)
 - [x] Create and push `dev` branch
 
-## Phase 1: Audit (research-only)
+## Phase 1: Audit (research-only) ✅
 
-- [ ] **1.1** Dispatch research subagent to inventory every auth-related file in upstream:
-  - `src/main/hermes-auth.ts` (provider OAuth flows for *LLM providers*)
-  - `src/main/dashboard.ts` (the dashboard transport — the one missing OAuth)
-  - `src/main/ipc/register.ts` (IPC channels)
-  - `src/preload/index.ts` (preload bridge)
-  - `src/renderer/src/screens/Settings/Settings.tsx` (UI)
-  - `src/shared/i18n/locales/en/welcome.ts` + `settings.ts` (strings)
-  - `src/main/connection-config.cjs` equivalents (if any)
-  - `src/main/ssh-remote.ts` (token transport via SSH — read-only context)
-  - `src/main/remote-sessions.ts`, `remote-models.ts`, `remote-metadata.ts`
-- [ ] **1.2** Agent returns structured report with:
-  - File-by-file "what currently handles auth"
-  - Exact insertion points for OAuth login + ticket-mint + reconnect logic
-  - IPC channel naming convention (so we register ours consistently)
-  - i18n key naming convention
-  - Existing test coverage map (`tests/` directory)
-- [ ] **1.3** Parent reviews audit, asks user any open questions, writes Phase 2 kickoff
+> **Full audit report:** [`tasks/audits/phase-1-audit.md`](audits/phase-1-audit.md) (345 lines, 7 sections, 17 files characterized).
+> **Summary:** [`tasks/audits/phase-1-audit-summary.md`](audits/phase-1-audit-summary.md) (apply-agent quick-ref).
+
+- [x] **1.1** Dispatched research subagent (opencode) to inventory every auth-related file in upstream
+- [x] **1.2** Agent returned structured 7-section report (A: Inventory, B: IPC conventions, C: i18n, D: dashboard flow gap with code quotes, E: test patterns, F: lat.md integration, G: risks/gotchas)
+- [x] **1.3** Parent verified critical claims (channel regex, namespace collision, line numbers) — all confirmed
+- [x] **1.4** Audit saved to `tasks/audits/phase-1-audit.md`; summary in `phase-1-audit-summary.md`
+- [x] **1.5** todo.md updated to reflect audit findings (colons → kebab-case, `oauth-dashboard-*` prefix, file list expanded)
+
+**Key audit findings that shape Phase 2:**
+- Primary integration point: `src/main/dashboard.ts:379-391` (the hard-coded "OAuth not wired" error)
+- Channel naming MUST be kebab-case (`oauth-dashboard-*`); colons illegal
+- `ConnectionConfig` ripples through 7+ files; update in lockstep
+- Settings UI is tightly coupled to token path; need careful `getConnectionApiKeyForSave()` handling
+- Clean slate — no abandoned OAuth attempts
+- lat.md integration is wide open — we'll be the first to add dashboard-auth entries
+
+**Next:** Phase 2 — write apply kickoff referencing the audit + port spec from official `main.cjs:3940-4220`, then dispatch coding agent.
 
 ## Phase 2: Apply (port + extend)
+
+> **Channel naming constraint (discovered in audit):** `tests/preload-api-surface.test.ts:233,243` enforces `/^[a-z][a-z0-9-]*$/`. **NO COLONS allowed.** Use kebab-case: `oauth-dashboard-login`, `oauth-dashboard-status`, `oauth-dashboard-logout`. Also: `oauth-login*` namespace is already taken by provider sign-in (`src/main/ipc/register.ts:283-312`), so dashboard OAuth must use `oauth-dashboard-*` prefix.
 
 - [ ] **2.1** Create `feat/oauth-ticket-flow` branch off `dev`
 - [ ] **2.2** Apply agent ports Nous's `electron/main.cjs:3940–4220` into:
   - `src/main/oauth.ts` (new) — `oauthLoginConnectionConfig`, `freshGatewayWsUrl`, `mintGatewayWsTicket`
-  - `src/main/connection-config.ts` — extend `ConnectionConfig` with `authMode: "token" | "oauth"` and `oauth: { lastLoginAt, cookiesReady }`
-  - `src/main/dashboard.ts` — switch `getRemoteDashboardStatusForConfig` + `requestDashboardConnection` to OAuth path when `authMode === "oauth"`
-  - `src/main/ipc/register.ts` — register new channels: `oauth:login`, `oauth:status`, `oauth:logout`, `ws-ticket:mint`
-  - `src/preload/index.ts` — expose new IPC to renderer
-  - `src/renderer/src/screens/Settings/Settings.tsx` — "Connect to Remote Hermes" dialog gets `Auth: Token / OAuth` radio
-  - `src/shared/i18n/locales/en/{welcome,settings}.ts` — new strings: `authModeOAuth`, `oauthLoginButton`, etc.
+  - `src/main/config.ts` — extend `ConnectionConfig` with `authMode: "token" | "oauth"` and `oauth: { lastLoginAt, cookiesReady, partition }`; mirror in `PublicConnectionConfig`
+  - `src/main/dashboard.ts` — switch `getRemoteDashboardStatusForConfig` + WS URL building to OAuth path when `authMode === "oauth"` (replace lines 379-391's hard-coded error)
+  - `src/main/remote-sessions.ts` — extend `RemoteSessionConfig` to accept OAuth partition (Phase 2 may defer this to follow-up)
+  - `src/main/ipc/register.ts` — register new channels: `oauth-dashboard-login`, `oauth-dashboard-status`, `oauth-dashboard-logout`
+  - `src/preload/index.ts` + `index.d.ts` — expose `oauthDashboardLogin(url)`, `oauthDashboardStatus()`, `oauthDashboardLogout()`
+  - `src/renderer/src/screens/Settings/Settings.tsx` — "Connect to Remote Hermes" remote tab gets `Auth: Token / OAuth` radio + "Sign in with Nous" button + status display
+  - `src/shared/i18n/locales/en/settings.ts` + `welcome.ts` — add `authMode*`, `oauth*` keys (full list in `tasks/audits/phase-1-audit.md` Section C)
 - [ ] **2.3** Tests (vitest, in `tests/` per upstream convention):
   - OAuth login window opens expected URL
   - `mintGatewayWsTicket` returns ticket string on 200
