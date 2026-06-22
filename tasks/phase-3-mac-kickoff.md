@@ -2,10 +2,10 @@
 
 **Goal:** Verify the OAuth dashboard auth flow works end-to-end against the live gated dashboard on athena.
 
-**Test target:** `http://auxois-wyrm.ts.net:9119` (Tailscale-only — must be on your VPN)
+**Test target:** `https://dashboard.auxois-wyrm.ts.net` (from `HERMES_DASHBOARD_PUBLIC_URL` in `~/.hermes/.env` — Tailscale https serve/funnel proxy, valid cert)
 
-**Branch to test:** `dev` (latest, after PR #4 merge)
-- `origin/dev` tip: `48f0383`
+**Branch to test:** `dev` (latest, after PR #6 merge)
+- `origin/dev` tip: `63e5fe3`
 - `vkkatariya/hermes-desktop-oauth:dev` is the source of truth
 
 ---
@@ -78,12 +78,13 @@ Launch Hermes.app.
 
 In Hermes.app:
 1. **Settings** → tab **Remote**
-2. URL: `http://auxois-wyrm.ts.net:9119`
+2. URL: `https://dashboard.auxois-wyrm.ts.net` (from `HERMES_DASHBOARD_PUBLIC_URL` in `~/.hermes/.env` — uses Tailscale's https serve/funnel, has valid cert)
+   - Do **NOT** use `http://auxois-wyrm.ts.net:9119` (raw port — works over tailnet but no cert, can fail TLS checks)
 3. **Auth mode radio** (new!) → select **OAuth (browser)**
 4. The credential/API-key field should **disappear** (it's token-only)
 5. Click **Sign in with browser**
 
-Expected: a BrowserWindow opens, navigates to `https://portal.nous.research/...` (or similar), you complete the OAuth round-trip, the window closes, and the Settings panel shows **"OAuth session active"** with your email.
+Expected: a BrowserWindow opens, navigates to the Nous Portal OAuth login (the OAuth client is registered as `HERMES_DASHBOARD_OAUTH_CLIENT_ID=agent:...` in `.env`), you complete the OAuth round-trip, the window closes, and the Settings panel shows **"OAuth session active"** with your email.
 
 ## Step 5 — Verify the chat tab works
 
