@@ -1,6 +1,9 @@
 import { BrowserWindow, net, session } from "electron";
+import https from "https";
+import http from "http";
 
-const OAUTH_SESSION_PARTITION_PREFIX = "persist:hermes-oauth";
+const OAUTH_SESSION_PARTITION_PREFIX="persist:hermes-oauth";
+
 
 export interface OAuthLoginResult {
   ok: boolean;
@@ -20,6 +23,77 @@ export function getOAuthPartition(profile: string): string {
 }
 
 // @lat: [[lat.md/oauth-login#Session cookie detection]]
+
+
+/**
+ * Discover the auth providers the dashboard advertises via /api/status.
+ *
+ * Returns the list from `auth_providers` in the status response. If the
+ * dashboard is unreachable or the response shape is unexpected, falls back
+ * to `["nous"]` for backward compatibility with installs that predate
+ * the multi-provider support.
+ *
+ * Used by oauthDashboardLogin to build the `/auth/login?provider=<name>`
+ * URL — every known provider shape requires the query parameter.
+ */
+export async function getAuthProviders(
+  baseUrl: string,
+  // Dependency injection for testing. Defaults to a real http(s) GET.
+  fetcher: typeof defaultFetcher = defaultFetcher,
+): Promise<string[]> {
+  return fetcher(baseUrl)
+    .then((providers) => {
+      const filtered = providers.filter(
+        (p) => typeof p === "string" && p.length > 0,
+      );
+      return filtered.length > 0 ? filtered : ["nous"];
+    })
+    .catch(() => ["nous"]);
+}
+
+type Fetcher = (baseUrl: string) => Promise<string[]>;
+
+const defaultFetcher: Fetcher = (baseUrl: string): Promise<string[]> => {
+  return new Promise((resolve) => {
+    let parsed: URL;
+    try {
+      parsed = new URL("/api/status", baseUrl.endsWith("/") ? baseUrl : baseUrl + "/");
+    } catch {
+      resolve(["nous"]);
+      return;
+    }
+    const client = parsed.protocol === "https:" ? https : http;
+    const req = client.request(parsed, { method: "GET", timeout: 4000 }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => {
+        try {
+          const text = Buffer.concat(chunks).toString("utf8");
+          const json = JSON.parse(text) as { auth_providers?: unknown };
+          if (Array.isArray(json.auth_providers)) {
+            const providers = json.auth_providers.filter(
+              (p): p is string => typeof p === "string" && p.length > 0,
+            );
+            if (providers.length > 0) {
+              resolve(providers);
+              return;
+            }
+          }
+        } catch {
+          // fall through to default
+        }
+        resolve(["nous"]);
+      });
+    });
+    req.on("error", () => resolve(["nous"]));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(["nous"]);
+    });
+    req.end();
+  });
+}
+
 export async function hasOAuthSessionCookies(
   baseUrl: string,
   profile: string,
@@ -68,7 +142,9 @@ export async function oauthDashboardLogin(
   const partition = getOAuthPartition(profile);
   const sess = session.fromPartition(partition);
   const normalized = baseUrl.replace(/\/$/, "");
-  const loginUrl = `${normalized}/auth/login`;
+  const providers = await getAuthProviders(normalized);
+  const provider = providers[0] ?? "nous";
+  const loginUrl = `${normalized}/auth/login?provider=${encodeURIComponent(provider)}`;
   const callbackPrefix = `${normalized}/auth/callback`;
 
   return new Promise((resolve) => {
