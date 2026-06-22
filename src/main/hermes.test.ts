@@ -89,6 +89,8 @@ function testConnection(
       remotePort: 8642,
       localPort: 8642,
     },
+    authMode: "token",
+    oauth: { cookiesReady: false },
     ...fields,
   };
 }
