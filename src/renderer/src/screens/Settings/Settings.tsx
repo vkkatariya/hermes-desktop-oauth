@@ -175,6 +175,12 @@ function Settings({ profile }: { profile?: string }): React.JSX.Element {
   const [apiServerKeyMissing, setApiServerKeyMissing] = useState(false);
   const [generatingKey, setGeneratingKey] = useState(false);
 
+  // Auth mode / OAuth state
+  const [connAuthMode, setConnAuthMode] = useState<"token" | "oauth">("token");
+  const [oauthCookiesReady, setOauthCookiesReady] = useState(false);
+  const [oauthEmail, setOauthEmail] = useState<string | undefined>(undefined);
+  const [oauthLoading, setOauthLoading] = useState(false);
+
   // SSH connection state
   const [sshHost, setSshHost] = useState("");
   const [sshPort, setSshPort] = useState("");
@@ -247,6 +253,9 @@ function Settings({ profile }: { profile?: string }): React.JSX.Element {
     setSshKeyPath(conn.ssh?.keyPath || "");
     setSshRemotePort(conn.ssh?.remotePort ? String(conn.ssh.remotePort) : "");
     setSshLocalPort(conn.ssh?.localPort ? String(conn.ssh.localPort) : "");
+    setConnAuthMode(conn.authMode ?? "token");
+    setOauthCookiesReady(conn.oauth?.cookiesReady ?? false);
+    setOauthEmail(conn.oauth?.lastLoginEmail);
     setApiServerKeyMissing(!keyStatus.hasKey);
     setAutoUpgradeEnabled(autoUpgrade);
     connLoaded.current = true;
@@ -369,6 +378,8 @@ function Settings({ profile }: { profile?: string }): React.JSX.Element {
   }
 
   function getConnectionApiKeyForSave(): string | undefined {
+    // OAuth mode doesn't use an API token.
+    if (connAuthMode === "oauth") return undefined;
     // Mask sentinel in the field means "the secret is still server-side
     // and the user hasn't touched it" — always preserve the stored key.
     // The old code wiped the key whenever the URL changed, so a one-
@@ -468,6 +479,7 @@ function Settings({ profile }: { profile?: string }): React.JSX.Element {
         connMode,
         connRemoteUrl,
         apiKey,
+        connAuthMode,
       );
       if (apiKey !== undefined) {
         const hasApiKey = apiKey.length > 0;
@@ -489,6 +501,36 @@ function Settings({ profile }: { profile?: string }): React.JSX.Element {
     setConnStatus("Saved");
     setTimeout(() => setConnStatus(null), 2000);
     void refreshTransportProbe();
+  }
+
+  async function handleOAuthLogin(): Promise<void> {
+    setOauthLoading(true);
+    try {
+      const result = await window.hermesAPI.oauthDashboardLogin(
+        connRemoteUrl,
+        profile,
+      );
+      if (result.ok) {
+        setOauthCookiesReady(true);
+        setOauthEmail(result.email);
+      } else {
+        setConnStatus(result.error ?? t("settings.oauthErrorBrowser"));
+        setTimeout(() => setConnStatus(null), 4000);
+      }
+    } finally {
+      setOauthLoading(false);
+    }
+  }
+
+  async function handleOAuthLogout(): Promise<void> {
+    setOauthLoading(true);
+    try {
+      await window.hermesAPI.oauthDashboardLogout(profile);
+      setOauthCookiesReady(false);
+      setOauthEmail(undefined);
+    } finally {
+      setOauthLoading(false);
+    }
   }
 
   async function handleChatTransportChange(
@@ -999,6 +1041,72 @@ function Settings({ profile }: { profile?: string }): React.JSX.Element {
             </div>
             <div className="settings-field">
               <label className="settings-field-label">
+                {t("settings.authModeLabel")}
+              </label>
+              <div className="settings-theme-options">
+                {(["token", "oauth"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`settings-theme-option ${connAuthMode === mode ? "active" : ""}`}
+                    onClick={() => {
+                      setConnAuthMode(mode);
+                      void window.hermesAPI.setConnectionConfig(
+                        connMode,
+                        connRemoteUrl,
+                        getConnectionApiKeyForSave(),
+                        mode,
+                      );
+                    }}
+                  >
+                    {mode === "token"
+                      ? t("settings.authModeToken")
+                      : t("settings.authModeOAuth")}
+                  </button>
+                ))}
+              </div>
+              <div className="settings-field-hint">
+                {t("settings.authModeHint")}
+              </div>
+            </div>
+            {connAuthMode === "oauth" && (
+              <div className="settings-field">
+                <label className="settings-field-label">
+                  {oauthCookiesReady
+                    ? t("settings.oauthStatusReady")
+                    : t("settings.oauthStatusNeedsLogin")}
+                </label>
+                {oauthEmail && (
+                  <div className="settings-field-hint">
+                    {t("settings.oauthLoggedInAs")} {oauthEmail}
+                  </div>
+                )}
+                <div className="settings-hermes-actions">
+                  {oauthCookiesReady ? (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => void handleOAuthLogout()}
+                      disabled={oauthLoading}
+                    >
+                      {t("settings.oauthLogoutButton")}
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => void handleOAuthLogin()}
+                      disabled={oauthLoading || !connRemoteUrl.trim()}
+                    >
+                      {oauthLoading
+                        ? t("settings.oauthStatusConnecting")
+                        : t("settings.oauthLoginButton")}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {connAuthMode === "token" && (
+            <div className="settings-field">
+              <label className="settings-field-label">
                 {t("settings.remoteApiKey")}
               </label>
               <input
@@ -1018,6 +1126,7 @@ function Settings({ profile }: { profile?: string }): React.JSX.Element {
                 {t("settings.remoteApiKeyHint")}
               </div>
             </div>
+            )}
             <div className="settings-field">
               <label className="settings-field-label">Chat transport</label>
               <div className="settings-theme-options">
