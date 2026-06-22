@@ -62,6 +62,7 @@ interface DashboardStatus {
   connection?: DashboardConnection;
   error?: string;
   logPath?: string;
+  needs_oauth_login?: boolean;
 }
 
 const electronAPI = {

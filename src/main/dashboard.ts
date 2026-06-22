@@ -54,6 +54,13 @@ export interface DashboardStatus {
   connection?: DashboardConnection;
   error?: string;
   logPath?: string;
+  /**
+   * True when the dashboard requires OAuth browser authentication but the
+   * current session has no usable cookies yet. Lets the renderer react
+   * explicitly (e.g. surface a "Sign in" CTA) instead of parsing the error
+   * string. Always false for local / SSH / token-mode dashboards.
+   */
+  needs_oauth_login?: boolean;
 }
 
 interface ManagedDashboard {
@@ -406,12 +413,14 @@ async function getRemoteDashboardStatusForConfig(
             running: false,
             connection,
             error: err instanceof Error ? err.message : String(err),
+            needs_oauth_login: true,
           };
         }
       }
       return {
         supported: true,
         running: false,
+        needs_oauth_login: true,
         error:
           config.authMode === "oauth"
             ? "Dashboard requires OAuth sign-in. Use the Sign in button in Settings."

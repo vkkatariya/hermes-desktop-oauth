@@ -1,6 +1,7 @@
 import http from "http";
 import https from "https";
 import type { CachedSession } from "./session-cache";
+import { mintGatewayWsTicket } from "./oauth";
 import {
   extractLeadingVisionImageFallback,
   stripTrailingImagePlaceholders,
@@ -18,6 +19,13 @@ import { isImageMime, MAX_IMAGE_BYTES } from "../shared/attachments";
 export interface RemoteSessionConfig {
   remoteUrl: string;
   apiKey: string;
+  authMode?: "token" | "oauth";
+  /**
+   * OAuth profile name used to look up the persistent Electron session
+   * partition that holds the user's Portal cookies. Required when
+   * `authMode === "oauth"`. Ignored otherwise.
+   */
+  oauthProfile?: string;
 }
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
@@ -48,11 +56,23 @@ function dashboardApiUrl(config: RemoteSessionConfig, path: string): string {
   return new URL(path, `${base}/`).toString();
 }
 
-export function remoteRequestJson<T>(
+export async function remoteRequestJson<T>(
   config: RemoteSessionConfig,
   path: string,
   options: RemoteRequestOptions = {},
 ): Promise<T> {
+  // OAuth mode: mint a single-use ticket per call and pass it as ?ticket=
+  // (matches the pattern in dashboard.ts freshGatewayWsUrl).
+  if (config.authMode === "oauth") {
+    // Default profile is "default" — matches dashboard.ts resolveProfile fallback.
+    const profile = config.oauthProfile ?? "default";
+    const ticket = await mintGatewayWsTicket(config.remoteUrl, profile);
+    const url = new URL(dashboardApiUrl(config, path));
+    url.searchParams.set("ticket", ticket);
+    return rawRemoteRequestJson<T>(url, options);
+  }
+
+  // Token mode (default): existing behavior — bearer token via header
   const token = config.apiKey.trim();
   if (!token)
     throw new Error("Remote Hermes dashboard token is not configured.");
@@ -244,6 +264,69 @@ function normalizeCachedSession(row: RemoteRecord): CachedSession {
 function sessionsFromResponse(response: unknown): RemoteRecord[] {
   const record = asRecord(response);
   return asArray(record.sessions);
+}
+
+
+function rawRemoteRequestJson<T>(
+  url: URL,
+  options: RemoteRequestOptions,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const client = url.protocol === "https:" ? https : http;
+    const body =
+      options.body === undefined ? undefined : JSON.stringify(options.body);
+    const req = client.request(
+      url,
+      {
+        method: options.method ?? "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(body ? { "Content-Length": Buffer.byteLength(body) } : {}),
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("error", reject);
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          if ((res.statusCode ?? 500) >= 400) {
+            reject(
+              new Error(`${res.statusCode}: ${text || res.statusMessage}`),
+            );
+            return;
+          }
+          if (!text) {
+            resolve(null as T);
+            return;
+          }
+          try {
+            resolve(JSON.parse(text) as T);
+          } catch {
+            reject(
+              new Error(
+                `Invalid JSON from ${url.toString()} (status ${
+                  res.statusCode
+                }): ${text.slice(0, 200)}`,
+              ),
+            );
+          }
+        });
+      },
+    );
+    req.on("error", reject);
+    req.setTimeout(options.timeoutMs ?? 15_000, () => {
+      req.destroy(
+        new Error(
+          `Timed out connecting to remote Hermes dashboard after ${
+            options.timeoutMs ?? 15_000
+          }ms`,
+        ),
+      );
+    });
+    if (body) req.write(body);
+    req.end();
+  });
 }
 
 async function remoteSessionListPage(
