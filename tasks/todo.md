@@ -98,26 +98,47 @@
 > - Dashboard backend on athena is live and OAuth-gated: `/api/status` returns `auth_required: true`, `auth_providers: ["nous"]`. `POST /api/auth/ws-ticket` responds with proper `401 no_cookie` shape.
 > - DNS for `auxois-wyrm.ts.net` only resolves from Tailscale clients (not from athena sandbox), so e2e must run from your Mac over Tailscale.
 
-- [ ] **3.1** User (Vishal) clones fork on Mac — `git clone git@github.com:vkkatariya/hermes-desktop-oauth.git && cd hermes-desktop-oauth && git checkout dev`
-- [ ] **3.2** `npm ci && npm run build:mac` → signed/notarized `.dmg` (or local-dev build if signing not set up)
-  - **Tip:** the Mac build is `electron-builder --mac`. `publish:` in `electron-builder.yml` is set to `fathah/` (upstream) — leave alone unless you want to change distribution target.
-- [ ] **3.3** Install `.dmg`, launch Hermes.app
-- [ ] **3.4** Settings → Connect to Remote Hermes → URL = `http://auxois-wyrm.ts.net:9119` → Auth = **OAuth**
-  - The Settings UI now has the auth-mode radio. The credential field should hide when OAuth is selected.
-- [ ] **3.5** Click "Sign in with browser" → BrowserWindow opens → Portal OAuth round-trip → cookies set → return to Settings → "Connected"
-- [ ] **3.6** Open chat tab → WebSocket connects with fresh `?ticket=` → full dashboard features (model picker, slash commands, session sync) work
-- [ ] **3.7** Quit + relaunch Hermes.app → cookies persist (persistent partition) → auto-reconnect, no re-login needed
-- [ ] **3.8** Verify 24h refresh-token rotation by waiting >15min (manual) — gateway should rotate AT cookie transparently
+### Phase 3 status (as of 2026-06-22 end of session)
 
-### Quick triage if something fails
+**Completed on Mac:**
+- [x] **3.1** Fork cloned
+- [x] **3.2** `npm ci && npm run build:mac` ✅ — produced `dist/hermes-desktop-0.6.34-arm64.dmg` and `dist/mac-arm64/Hermes One.app`. Ad-hoc signed, notarization skipped (expected on dev machine).
+- [x] **3.3** Hermes.app launched ✅
+- [x] **3.4** Settings → Remote configured with `https://dashboard.auxois-wyrm.ts.net` (from `HERMES_DASHBOARD_PUBLIC_URL` in `~/.hermes/.env`), Auth = OAuth ✅
+- [x] **3.5** "Sign in with browser" round-tripped via Nous Portal OAuth ✅ — cookies persisted across app restart ✅ (3.7 implicit)
+- [x] **3.6** Chat tab opened but WebSocket connection failed — see "Open issue" below
+- [ ] **3.7** Cookies persist across app restart ✅ verified by re-launching
+- [ ] **3.8** Refresh-token rotation — not exercised (gateway doesn't issue refresh tokens in OAuth contract v1; AT cookie TTL is 15 min and SPA does full re-login on 401)
 
-| Symptom | Likely cause |
-|---|---|
-| Build fails on Mac | Run `npm rebuild` or check `node_modules/electron/path.txt` exists (Electron postinstall footgun, see `tasks/audits/phase-2-test-rerun.md`) |
-| "OAuth not wired" error still appears | Old `feat/dashboard-oauth` checkout — pull latest `dev` |
-| BrowserWindow opens but cookies don't persist | Check Electron session partition name matches between login and status probe |
-| WebSocket 401 immediately after login | `/api/auth/ws-ticket` returning ticket rejected — check dashboard logs for ticket mint failures |
-| `needs_oauth_login` not showing in UI | Renderer not reading the field — check Settings.tsx consumes `DashboardStatus.needs_oauth_login` (we only added the type; UI consumption is follow-up if needed) |
+### Open issue — WebSocket auth (blocks chat completion)
+
+**Symptom:** Chat tab shows "Could not connect to Hermes dashboard WebSocket" immediately on attempt to send a message.
+
+**Investigation (athena, 2026-06-22):**
+- Renderer calls `window.hermesAPI.startDashboard(profile)` → main process returns `DashboardStatus.connection.wsUrl` = `wss://dashboard.auxois-wyrm.ts.net/api/ws?ticket=<fresh>`
+- Renderer opens `new WebSocket(wsUrl)` from `dashboardGatewayClient.ts:115` — the **browser context** of the renderer process
+- Dashboard's `/api/ws` returns 401 `no_cookie` (or 403 on upgrade attempt)
+
+**Root cause:** Dashboard requires **both** a valid ticket AND the OAuth session cookies (`hermes_session_at`) on the WebSocket upgrade. The cookies live in the main process's persistent Electron session (`persist:hermes-oauth-default`) — **not** in the renderer's browser context. The renderer's WebSocket sends the ticket but has no cookies to send.
+
+This is confirmed by `curl /api/ws?ticket=invalid` returning `401 no_cookie`, and `/api/auth/ws-ticket` itself requiring cookies (returns `401 no_cookie` without them).
+
+**Architectural options (decision deferred to next session):**
+1. Move WebSocket connection to main process — keeps auth boundary clean; renderer sends events via IPC. Biggest code change.
+2. Forward cookies via IPC at connect time — main reads `session.cookies.get(...)`, passes to renderer, renderer attaches as Cookie header. Smaller change, but cookies travel across IPC boundary.
+3. Keep BrowserWindow open after login — renderer could reuse that session. Awkward UX, leaks a window.
+4. Probe whether dashboard accepts ticket alone with proper WS upgrade framing (might be that the 403 is from curl's malformed upgrade, not the auth model). 5-min experiment, worth doing first.
+
+**Tests in `tests/oauth-dashboard.test.ts`** for `oauthDashboardLogin` had to be updated:
+- "resolves with error when window is closed before cookies arrive" — was timing out because `oauthDashboardLogin` now does an extra HTTP GET via `getAuthProviders`. Changed baseUrl from `http://hermes.local` (DNS never fails) to `http://127.0.0.1:1` (ECONNREFUSED fast).
+
+### Files in this phase
+
+- `tasks/phase-3-mac-kickoff.md` — Mac e2e step-by-step guide (corrected for actual dmg filename + Gatekeeper + URL)
+- `src/main/oauth.ts` — added `getAuthProviders(baseUrl, fetcher?)` for dynamic provider discovery
+- `tests/oauth-get-auth-providers.test.ts` (new) — 9 tests for provider discovery + fallbacks
+- `tests/oauth-dashboard.test.ts` — adjusted 1 test for the new `getAuthProviders` HTTP call
+- `src/shared/i18n/locales/he,tr/settings.ts` — removed duplicate `apiGenerated` keys (build blocker)
 
 ## Phase 4: PR upstream
 
