@@ -4,13 +4,13 @@
 <p align="center">
   <a href="https://x.com/HermesOneApp"><img src="https://img.shields.io/badge/Follow Us-000000?style=for-the-badge&logo=x" alt="Twitter"></a>
   <a href="https://discord.gg/Fqu72h8z"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/fathah/hermes-desktop/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
+  <a href="https://github.com/vkkatariya/hermes-desktop-oauth/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
   <a href="https://hermesone.org"><img src="https://img.shields.io/badge/Download-Releases-FF6600?style=for-the-badge" alt="Releases"></a>
-<a href="https://github.com/fathah/hermes-desktop/stargazers">
-  <img src="https://img.shields.io/github/stars/fathah/hermes-desktop?style=for-the-badge&color=FFD700&label=Stars" alt="Stars">
+<a href="https://github.com/vkkatariya/hermes-desktop-oauth/stargazers">
+  <img src="https://img.shields.io/github/stars/vkkatariya/hermes-desktop-oauth?style=for-the-badge&color=FFD700&label=Stars" alt="Stars">
 </a>
-  <a href="https://github.com/fathah/hermes-desktop/releases/">
-  <img src="https://img.shields.io/github/downloads/fathah/hermes-desktop/total?style=for-the-badge&color=00B496&label=Total%20Downloads" alt="Downloads">
+  <a href="https://github.com/vkkatariya/hermes-desktop-oauth/releases/">
+  <img src="https://img.shields.io/github/downloads/vkkatariya/hermes-desktop-oauth/total?style=for-the-badge&color=00B496&label=Total%20Downloads" alt="Downloads">
 </a>
    <a href="https://bankr.bot/launches/0xfda75f77a22b4f4b783bbbb21915ef64d149bba3">
   <img src="https://img.shields.io/badge/Token-$HD-purple?style=for-the-badge&logo=ethereum" alt="Downloads">
@@ -26,16 +26,16 @@
 </p>
 
 <p align="center">
- <a href="https://www.star-history.com/fathah/hermes-desktop">
+ <a href="https://www.star-history.com/vkkatariya/hermes-desktop-oauth">
   <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/badge?repo=fathah/hermes-desktop&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/badge?repo=fathah/hermes-desktop" />
-   <img alt="Star History Rank" src="https://api.star-history.com/badge?repo=fathah/hermes-desktop" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/badge?repo=vkkatariya/hermes-desktop-oauth&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/badge?repo=vkkatariya/hermes-desktop-oauth" />
+   <img alt="Star History Rank" src="https://api.star-history.com/badge?repo=vkkatariya/hermes-desktop-oauth" />
   </picture>
  </a>
 </p>
 
-> **This project is in active development.** Features may change, and some things might break. If you run into a problem or have an idea, [open an issue](https://github.com/fathah/hermes-desktop/issues). Contributions are welcome!
+> **This project is in active development.** Features may change, and some things might break. If you run into a problem or have an idea, [open an issue](https://github.com/vkkatariya/hermes-desktop-oauth/issues). Contributions are welcome!
 
 Hermes One is a community maintained native desktop app for installing, configuring, and chatting with [Hermes Agent](https://github.com/NousResearch/hermes-agent) — a self-improving AI assistant with tool use, multi-platform messaging, and a closed learning loop.
 
@@ -75,7 +75,7 @@ Instead of managing the CLI by hand, the app walks through install, provider set
 > sudo rm /etc/sudoers.d/hermes-install
 > ```
 >
-> Tracked in [#109](https://github.com/fathah/hermes-desktop/issues/109).
+> Tracked in [#109](https://github.com/vkkatariya/hermes-desktop-oauth/issues/109).
 
 </details>
 
@@ -326,7 +326,7 @@ Source of truth: [`src/main/secrets/`](src/main/secrets/).
 
 ## Contributing
 
-Contributions are welcome! Check out the [Contributing Guide](CONTRIBUTING.md) to get started. If you're not sure where to begin, take a look at the [open issues](https://github.com/fathah/hermes-desktop/issues). Found a bug or have a feature request? [File an issue](https://github.com/fathah/hermes-desktop/issues/new).
+Contributions are welcome! Check out the [Contributing Guide](CONTRIBUTING.md) to get started. If you're not sure where to begin, take a look at the [open issues](https://github.com/vkkatariya/hermes-desktop-oauth/issues). Found a bug or have a feature request? [File an issue](https://github.com/vkkatariya/hermes-desktop-oauth/issues/new).
 
 ## Related Project
 
