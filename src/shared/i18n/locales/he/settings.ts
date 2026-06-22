@@ -180,7 +180,6 @@ export default {
   remoteErrorRequiredSimple: "אנא הזינו כתובת URL",
   remoteErrorFailedSimple: "לא ניתן היה להגיע לשרת",
   apiGenerated: "מפתח ה-API נוצר — השער מופעל מחדש…",
-  apiGenerated: "API key generated — gateway restarting…",
   authModeLabel: "Authentication mode",
   authModeToken: "API token",
   authModeOAuth: "OAuth (browser)",

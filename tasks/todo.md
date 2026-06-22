@@ -90,14 +90,34 @@
 
 ## Phase 3: End-to-end verify (Mac)
 
-- [ ] **3.1** User (Vishal) clones fork on Mac
+> **Pre-flight verification (athena, 2026-06-22 23:30):**
+> - `npm ci` clean install: ✅ passes
+> - `electron-builder install-app-deps`: ✅ rebuilt `better-sqlite3` for arm64
+> - `npm run build` (typecheck + electron-vite build): ✅ passes
+> - One pre-existing build blocker fixed in this session: duplicate `apiGenerated` keys in `he/` and `tr/` locales from Phase 2 i18n mirror (TS1117). Committed `019506c`.
+> - Dashboard backend on athena is live and OAuth-gated: `/api/status` returns `auth_required: true`, `auth_providers: ["nous"]`. `POST /api/auth/ws-ticket` responds with proper `401 no_cookie` shape.
+> - DNS for `auxois-wyrm.ts.net` only resolves from Tailscale clients (not from athena sandbox), so e2e must run from your Mac over Tailscale.
+
+- [ ] **3.1** User (Vishal) clones fork on Mac — `git clone git@github.com:vkkatariya/hermes-desktop-oauth.git && cd hermes-desktop-oauth && git checkout dev`
 - [ ] **3.2** `npm ci && npm run build:mac` → signed/notarized `.dmg` (or local-dev build if signing not set up)
+  - **Tip:** the Mac build is `electron-builder --mac`. `publish:` in `electron-builder.yml` is set to `fathah/` (upstream) — leave alone unless you want to change distribution target.
 - [ ] **3.3** Install `.dmg`, launch Hermes.app
-- [ ] **3.4** Settings → Connect to Remote Hermes → URL = `https://<athena-tailnet>/dashboard` → Auth = OAuth
-- [ ] **3.5** Click "Sign in with Nous" → BrowserWindow opens → Portal OAuth round-trip → cookies set → return to Settings → "Connected"
+- [ ] **3.4** Settings → Connect to Remote Hermes → URL = `http://auxois-wyrm.ts.net:9119` → Auth = **OAuth**
+  - The Settings UI now has the auth-mode radio. The credential field should hide when OAuth is selected.
+- [ ] **3.5** Click "Sign in with browser" → BrowserWindow opens → Portal OAuth round-trip → cookies set → return to Settings → "Connected"
 - [ ] **3.6** Open chat tab → WebSocket connects with fresh `?ticket=` → full dashboard features (model picker, slash commands, session sync) work
 - [ ] **3.7** Quit + relaunch Hermes.app → cookies persist (persistent partition) → auto-reconnect, no re-login needed
 - [ ] **3.8** Verify 24h refresh-token rotation by waiting >15min (manual) — gateway should rotate AT cookie transparently
+
+### Quick triage if something fails
+
+| Symptom | Likely cause |
+|---|---|
+| Build fails on Mac | Run `npm rebuild` or check `node_modules/electron/path.txt` exists (Electron postinstall footgun, see `tasks/audits/phase-2-test-rerun.md`) |
+| "OAuth not wired" error still appears | Old `feat/dashboard-oauth` checkout — pull latest `dev` |
+| BrowserWindow opens but cookies don't persist | Check Electron session partition name matches between login and status probe |
+| WebSocket 401 immediately after login | `/api/auth/ws-ticket` returning ticket rejected — check dashboard logs for ticket mint failures |
+| `needs_oauth_login` not showing in UI | Renderer not reading the field — check Settings.tsx consumes `DashboardStatus.needs_oauth_login` (we only added the type; UI consumption is follow-up if needed) |
 
 ## Phase 4: PR upstream
 
