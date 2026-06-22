@@ -49,6 +49,13 @@ export interface ConnectionConfig {
   remoteChatTransport: RemoteChatTransport;
   sshChatTransport: RemoteChatTransport;
   ssh: SshConnectionConfig;
+  authMode?: "token" | "oauth";
+  oauth?: {
+    partitionName?: string;
+    lastLoginAt?: number;
+    lastLoginEmail?: string;
+    cookiesReady: boolean;
+  };
 }
 
 export interface PublicConnectionConfig {
@@ -62,6 +69,12 @@ export interface PublicConnectionConfig {
   // leaves the main process. 0 when no key is set.
   apiKeyLength: number;
   ssh: SshConnectionConfig;
+  authMode?: "token" | "oauth";
+  oauth?: {
+    lastLoginAt?: number;
+    lastLoginEmail?: string;
+    cookiesReady: boolean;
+  };
 }
 
 // Lazy getter — avoids circular dependency with installer.ts
@@ -110,6 +123,13 @@ export function getConnectionConfig(): ConnectionConfig {
       remotePort: (ssh.remotePort as number) || 8642,
       localPort: (ssh.localPort as number) || 18642,
     },
+    authMode: (data.authMode as "token" | "oauth") || "token",
+    oauth: {
+      partitionName: (data.oauth as Record<string, unknown> | undefined)?.partitionName as string | undefined,
+      lastLoginAt: (data.oauth as Record<string, unknown> | undefined)?.lastLoginAt as number | undefined,
+      lastLoginEmail: (data.oauth as Record<string, unknown> | undefined)?.lastLoginEmail as string | undefined,
+      cookiesReady: ((data.oauth as Record<string, unknown> | undefined)?.cookiesReady as boolean | undefined) ?? false,
+    },
   };
 }
 
@@ -123,6 +143,14 @@ export function getPublicConnectionConfig(): PublicConnectionConfig {
     hasApiKey: config.apiKey.length > 0,
     apiKeyLength: config.apiKey.length,
     ssh: config.ssh,
+    authMode: config.authMode,
+    oauth: config.oauth
+      ? {
+          lastLoginAt: config.oauth.lastLoginAt,
+          lastLoginEmail: config.oauth.lastLoginEmail,
+          cookiesReady: config.oauth.cookiesReady,
+        }
+      : undefined,
   };
 }
 
@@ -141,6 +169,19 @@ export function setConnectionConfig(config: ConnectionConfig): void {
   data.sshChatTransport = normalizeRemoteChatTransport(config.sshChatTransport);
   if (config.mode === "ssh") {
     data.sshConfig = config.ssh;
+  }
+  if (config.authMode !== undefined) {
+    data.authMode = config.authMode;
+  }
+  if (config.oauth !== undefined) {
+    const prev = (data.oauth as Record<string, unknown>) ?? {};
+    data.oauth = {
+      ...prev,
+      cookiesReady: config.oauth.cookiesReady,
+      ...(config.oauth.partitionName !== undefined ? { partitionName: config.oauth.partitionName } : {}),
+      ...(config.oauth.lastLoginAt !== undefined ? { lastLoginAt: config.oauth.lastLoginAt } : {}),
+      ...(config.oauth.lastLoginEmail !== undefined ? { lastLoginEmail: config.oauth.lastLoginEmail } : {}),
+    };
   }
   writeDesktopConfig(data);
 }
