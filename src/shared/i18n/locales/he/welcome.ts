@@ -21,4 +21,8 @@ export default {
   connect: "התחברות",
   remoteHint:
     "השאירו את שדה המפתח ריק אם השרת מקבל בקשות ללא אימות (לדוגמה, דרך מנהרת SSH ל-localhost).",
+  authModeLabel: "Authentication mode",
+  authModeToken: "API token",
+  authModeOAuth: "OAuth (browser)",
+  oauthLoginButton: "Sign in with browser",
 } as const;

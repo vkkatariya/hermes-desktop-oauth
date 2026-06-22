@@ -20,4 +20,8 @@ export default {
   connect: "連線",
   remoteHint:
     "如果伺服器接受未驗證的請求（如透過 SSH 隧道到 localhost），請留空金鑰。",
+  authModeLabel: "Authentication mode",
+  authModeToken: "API token",
+  authModeOAuth: "OAuth (browser)",
+  oauthLoginButton: "Sign in with browser",
 } as const;

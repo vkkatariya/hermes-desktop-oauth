@@ -78,7 +78,7 @@ describe("connection config OAuth fields", () => {
     const { writeFileSync } = await import("fs");
     const { join: pathJoin } = await import("path");
     writeFileSync(
-      pathJoin(testHome, "connection.json"),
+      pathJoin(testHome, "desktop.json"),
       JSON.stringify({ mode: "remote", remoteUrl: "http://example.com", apiKey: "tok" }),
     );
     const { getConnectionConfig } = await loadModule();

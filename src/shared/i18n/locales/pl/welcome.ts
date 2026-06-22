@@ -21,4 +21,8 @@ export default {
   connect: "Połącz",
   remoteHint:
     "Pozostaw klucz pusty, jeśli serwer akceptuje żądania nieuwierzytelnione (np. przez tunel SSH do localhost).",
+  authModeLabel: "Authentication mode",
+  authModeToken: "API token",
+  authModeOAuth: "OAuth (browser)",
+  oauthLoginButton: "Sign in with browser",
 } as const;
