@@ -285,7 +285,7 @@ export async function clearOAuthSession(
     await Promise.all(
       cookies.map(async (c) => {
         const scheme = c.secure ? "https" : "http";
-        const domain = c.domain.replace(/^\./, "");
+        const domain = (c.domain ?? "").replace(/^\./, "");
         const cookieUrl = `${scheme}://${domain}${c.path || "/"}`;
         try {
           await sess.cookies.remove(cookieUrl, c.name);
