@@ -399,13 +399,20 @@ async function getRemoteDashboardStatusForConfig(
         const oauthProfile = resolveProfile(profile) ?? "default";
         try {
           const wsUrl = await freshGatewayWsUrl(connection.baseUrl, oauthProfile);
+          // NOTE: do NOT call probeDashboardWebSocket here. The dashboard's
+          // /api/ws accepts single-use `?ticket=` credentials (see
+          // hermes_cli.dashboard_auth.ws_tickets.consume_ticket: a successful
+          // consume immediately removes the ticket from the store). Probing
+          // would burn the ticket before the renderer can use it, causing
+          // the renderer-side `new WebSocket(wsUrl)` to fail with 4401.
+          // We trust the URL — if it fails to connect, the renderer's own
+          // WebSocket error handler will surface the failure.
           const oauthConn: DashboardConnection = {
             ...connection,
             wsUrl,
             authMode: "oauth",
             oauthProfile,
           };
-          await probeDashboardWebSocket(oauthConn);
           return { supported: true, running: true, connection: oauthConn };
         } catch (err) {
           return {
