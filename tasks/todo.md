@@ -112,25 +112,41 @@
 
 ### Open issue — WebSocket auth (blocks chat completion)
 
-**Symptom:** Chat tab shows "Could not connect to Hermes dashboard WebSocket" immediately on attempt to send a message.
+**Original hypothesis:** Dashboard requires **both** a valid ticket AND the OAuth session cookies on the WebSocket upgrade. The cookies live in the main process's persistent Electron session (`persist:hermes-oauth-default`), not in the renderer's browser context. The renderer's WebSocket sends the ticket but has no cookies to send.
 
-**Investigation (athena, 2026-06-22):**
-- Renderer calls `window.hermesAPI.startDashboard(profile)` → main process returns `DashboardStatus.connection.wsUrl` = `wss://dashboard.auxois-wyrm.ts.net/api/ws?ticket=<fresh>`
-- Renderer opens `new WebSocket(wsUrl)` from `dashboardGatewayClient.ts:115` — the **browser context** of the renderer process
-- Dashboard's `/api/ws` returns 401 `no_cookie` (or 403 on upgrade attempt)
+**2026-06-23 probe (5 min) — REFUTED.** Read gateway source at `~/.hermes/hermes-agent/hermes_cli/web_server.py:11158-11205` (`_ws_auth_reason`) and `dashboard_auth/ws_tickets.py`. The gateway does **not** require cookies on the WS upgrade — it accepts `?ticket=<valid>` alone, validated against an in-memory ticket store. The browser/SPA design is:
 
-**Root cause:** Dashboard requires **both** a valid ticket AND the OAuth session cookies (`hermes_session_at`) on the WebSocket upgrade. The cookies live in the main process's persistent Electron session (`persist:hermes-oauth-default`) — **not** in the renderer's browser context. The renderer's WebSocket sends the ticket but has no cookies to send.
+1. SPA has session cookies → `POST /api/auth/ws-ticket` (with cookies) → gets a ticket
+2. SPA opens `new WebSocket("wss://.../api/ws?ticket=X")` → ticket is in URL only → server validates in-memory → accept
 
-This is confirmed by `curl /api/ws?ticket=invalid` returning `401 no_cookie`, and `/api/auth/ws-ticket` itself requiring cookies (returns `401 no_cookie` without them).
+Our desktop code (`freshGatewayWsUrl` in `src/main/oauth.ts`) does exactly this: mints the ticket with cookies attached via `net.request({ session: sess, useSessionCookies: true })`, then returns a `wss://.../api/ws?ticket=<fresh>` URL for the renderer to open.
 
-**Architectural options (decision deferred to next session):**
-1. Move WebSocket connection to main process — keeps auth boundary clean; renderer sends events via IPC. Biggest code change.
-2. Forward cookies via IPC at connect time — main reads `session.cookies.get(...)`, passes to renderer, renderer attaches as Cookie header. Smaller change, but cookies travel across IPC boundary.
-3. Keep BrowserWindow open after login — renderer could reuse that session. Awkward UX, leaks a window.
-4. Probe whether dashboard accepts ticket alone with proper WS upgrade framing (might be that the 403 is from curl's malformed upgrade, not the auth model). 5-min experiment, worth doing first.
+**Real failure mode is one of:**
+- (a) `mintGatewayWsTicket` failing on Mac (cookie partition or session loading bug specific to the Mac build)
+- (b) Origin/host/peer check failing (`_ws_request_is_allowed` at `web_server.py:11594`)
+- (c) WS URL being malformed somewhere in the renderer
 
-**Tests in `tests/oauth-dashboard.test.ts`** for `oauthDashboardLogin` had to be updated:
-- "resolves with error when window is closed before cookies arrive" — was timing out because `oauthDashboardLogin` now does an extra HTTP GET via `getAuthProviders`. Changed baseUrl from `http://hermes.local` (DNS never fails) to `http://127.0.0.1:1` (ECONNREFUSED fast).
+**Next debug step on Mac:** capture the actual `wsUrl` and dashboard logs to disambiguate (a) vs (b) vs (c):
+
+1. Open Hermes.app, sign in via OAuth, open DevTools (Cmd+Opt+I)
+2. In DevTools Console, run:
+   ```js
+   window.hermesAPI.startDashboard('default').then(s => console.log('STATUS:', JSON.stringify(s, null, 2)))
+   ```
+3. Look at `s.connection.wsUrl` — should be `wss://dashboard.auxois-wyrm.ts.net/api/ws?ticket=<long-base64>`
+4. Also check Network tab → WS frames → look for the actual WS upgrade URL sent
+5. On the athena side: `tail -f ~/.hermes/logs/gateway.log` (or wherever the gateway writes logs) and look for `WS_TICKET_REJECTED` audit events with reasons like `no_credential`, `ticket_invalid`, `internal_invalid`
+
+**Architectural options status (after probe):**
+
+| Option | Status | Why |
+|---|---|---|
+| 1. Move WS to main process | **NOT NEEDED** | Gateway accepts ticket-only on WS upgrade |
+| 2. Forward cookies via IPC | **NOT NEEDED** | Same reason |
+| 3. Keep BrowserWindow open | **NOT NEEDED** | Same reason |
+| 4. Probe ticket-only auth | **CONFIRMED WORKING** at protocol level | But Mac still fails — debug above |
+
+The fix is a small targeted bug, not an architectural change.
 
 ### Files in this phase
 
