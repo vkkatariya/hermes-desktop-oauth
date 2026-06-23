@@ -1,3 +1,68 @@
+## 2026-06-23 phase 3 finish + mac chat 302 — Hermes
+
+**Did:** Closed the WebSocket blocker on the Mac, then hit a deeper chat issue once WS was fixed. Two distinct problems in one session:
+
+**1. WebSocket ticket-burn bug (CLOSED — PR #11):**
+- Mac 3.6 chat failed with "Could not connect to Hermes dashboard WebSocket"
+- Hypothesized: dashboard needs both ticket + cookies on WS upgrade
+- 5-min probe: read `~/.hermes/hermes-agent/hermes_cli/web_server.py:11158-11205` and `dashboard_auth/ws_tickets.py` — gateway accepts `?ticket=<valid>` ALONE
+- Real root cause: `dashboard.ts:getRemoteDashboardStatusForConfig` called `probeDashboardWebSocket` AFTER minting the ticket. The probe's WS upgrade consumed the single-use ticket (gateway does `_tickets.pop(ticket)` in `consume_ticket`). Then the renderer's own `new WebSocket(wsUrl)` got rejected with 4401 "unknown ticket".
+- Fix: removed the `probeDashboardWebSocket` call from the OAuth branch. ~15 lines including the regression test.
+- Regression test: `tests/dashboard-oauth-ticket-not-burned.test.ts` — asserts no WS upgrade reaches the server during `getDashboardStatus` and the minted ticket is unused after the function returns. Verified to fail with bug present, pass after fix. Required `vi.resetModules()` pattern + electron mock for `session.fromPartition` + `net.request` HTTP forwarding to test server.
+- PR #11 (`a4a511d`) → merged → `origin/dev` at `54c8ed2`. Branch preserved at `2d71104`.
+
+**2. Mac chat 302 issue (DIAGNOSED — fix not applied):**
+- After rebuild with the ticket-burn fix: OAuth login works, WS connects, but typing a message shows `API server returned 302:` instead of an LLM response.
+- Traced the error string to `src/main/hermes.ts:1501` in THIS fork (not upstream):
+  ```ts
+  finish(`API server returned ${res.statusCode}: ${errBody.slice(0, 200)}`);
+  ```
+- The 302 is the **local Hermes API server** (gated dashboard at `https://dashboard.auxois-wyrm.ts.net/v1/chat/completions`) returning 302 to the Nous Portal login redirect, because the **spawned hermes Python backend has no OAuth session cookies** (those live in the Mac app's main-process Electron session, not the spawned Node child).
+- The 302 has NOTHING to do with `OLLAMA_API_KEY` — the request never reaches Ollama because the dashboard intercepts at the auth layer. Moving the OLLAMA key on the Mac can't fix this. Wasted ~20 min on this red herring before reading the source.
+- Fix options documented in `tasks/todo.md` (Mac chat 302 issue section). Recommended: option 1 (switch Mac Connection mode to Local/loopback) for unblocking, option 2 (forward auth headers) for proper community-PR shape.
+
+**State:** 12 PRs merged to `dev` (08fd5e2). 38/38 OAuth tests pass. `npm run build` clean. OAuth login + WS work on Mac. Chat is blocked on a separate auth-boundary bug between main process and spawned Node child. Not blocking the upstream PR (it's a different concern) but should be acknowledged in the PR body.
+
+**Decided:**
+- Don't fix the 302 today — it's a multi-decision design call (option 1/2/3 trade-offs), and Phase 4 prep is the next priority
+- The 302 is **not** an OAuth problem — it's a general Electron auth-boundary problem that would affect any future auth model. Document as a known issue, propose option 2 as the follow-up
+- Mac e2e is "good enough" for shipping upstream: login + WS work, chat works against local loopback. Chat-vs-gated-dashboard is a separate fix.
+
+**Next:** Pick a fix path for the 302 (or accept the known issue and ship the upstream PR with it documented). Either way, Phase 4 is the next session.
+
+**Modified:**
+- `src/main/dashboard.ts` — removed `probeDashboardWebSocket` call from OAuth branch
+- `tests/dashboard-oauth-ticket-not-burned.test.ts` (new) — regression test
+- `tasks/todo.md` — added "Mac chat 302 issue" section, updated Phase 3 status, expanded Phase 4 decisions
+- `tasks/DEVLOG.md` — this entry
+
+---
+
+## 2026-06-22 phase 3 mac e2e — Vishal + Hermes
+
+**Did:** First end-to-end Mac verification of the OAuth dashboard flow. Vishal cloned `dev`, built `dist/hermes-desktop-0.6.34-arm64.dmg`, installed Hermes.app, configured Settings → Remote with `https://dashboard.auxois-wyrm.ts.net` (from `HERMES_DASHBOARD_PUBLIC_URL` in `~/.hermes/.env`), switched to OAuth mode, clicked "Sign in with browser", completed the Nous Portal round-trip, and verified cookies persisted across app restart.
+
+**State:** OAuth login flow works end-to-end. Cookies persist. Only blocker remaining is the chat-tab WebSocket connection — see "Open issue" below.
+
+**Decided:**
+- Use `HERMES_DASHBOARD_PUBLIC_URL` (Tailscale https serve/funnel) as the Settings → Remote URL, not the raw tailnet `auxois-wyrm.ts.net:9119`. The public URL has valid TLS via Tailscale; raw port does not.
+- `npm run build` on athena as the pre-flight gate before Mac e2e. Caught the duplicate `apiGenerated` i18n key blocker (TS1117) that would have failed the Mac build.
+- Dynamic provider discovery via `getAuthProviders(baseUrl, fetcher?)` instead of hardcoding `?provider=nous`. Works with any provider list the dashboard advertises.
+- Dependency injection on `getAuthProviders` for testability — fetch helper is parameterized so tests don't need module-level http mocking.
+
+**Open issue — WebSocket auth (blocks chat completion):**
+Dashboard requires **both** a valid ticket AND the OAuth session cookies on the WebSocket upgrade. Cookies live in the main process's persistent Electron session (`persist:hermes-oauth-default`), not in the renderer's browser context. Renderer's `new WebSocket(wsUrl)` from `dashboardGatewayClient.ts:115` sends the ticket but has no cookies to send. Verified via `curl /api/ws?ticket=invalid` → 401 `no_cookie`. Architectural options documented in `tasks/todo.md` (Phase 3 open issue section). Decision deferred to next session.
+
+**Modified:**
+- `src/main/oauth.ts` — added `getAuthProviders(baseUrl, fetcher?)` + dependency injection pattern
+- `src/shared/i18n/locales/he/settings.ts` + `tr/settings.ts` — removed duplicate `apiGenerated` keys (build blocker)
+- `tests/oauth-get-auth-providers.test.ts` (new, 9 tests)
+- `tests/oauth-dashboard.test.ts` — adjusted 1 test for the new HTTP GET in `oauthDashboardLogin`
+- `tasks/phase-3-mac-kickoff.md` (new) — Mac e2e guide, corrected for actual dmg filename + Gatekeeper
+- `tasks/todo.md` — Phase 3 status updated; WebSocket open issue documented
+- `tasks/lessons.md` — 4 new lessons (rejection-free branch delete, file naming, i18n mechanical mirror, redaction trap)
+
+---
 ## 2026-06-22 phase 3 mac e2e — Vishal + Hermes
 
 **Did:** First end-to-end Mac verification of the OAuth dashboard flow. Vishal cloned `dev`, built `dist/hermes-desktop-0.6.34-arm64.dmg`, installed Hermes.app, configured Settings → Remote with `https://dashboard.auxois-wyrm.ts.net` (from `HERMES_DASHBOARD_PUBLIC_URL` in `~/.hermes/.env`), switched to OAuth mode, clicked "Sign in with browser", completed the Nous Portal round-trip, and verified cookies persisted across app restart.

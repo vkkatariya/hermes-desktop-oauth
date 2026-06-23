@@ -46,3 +46,15 @@
 **Fix:** Build identifiers via Python string concatenation (e.g. `prefix="remote"; suffix="ApiKey"; name=prefix+suffix`) so the literal token-field name never appears as a single source string. For commit messages, avoid trigger words entirely — use "ConnectionConfig secret field", "auth credentials", or describe the change without naming the field. Use `--force-with-lease` after amending a redacted commit message.
 
 **Prevention rule:** Treat `***` in any patch output as suspect until verified with `od -c` or hex dump — display layer often renders intact bytes as `***`. Always verify edits with `git diff` after every patch, especially around token-adjacent fields.
+
+---
+
+## 2026-06-23 — Diagnostic rabbit hole on the Mac chat 302
+
+**Symptom:** Mac Hermes One shows `API server returned 302:` when typing a chat message. Spent ~20 minutes investigating `OLLAMA_API_KEY` validity, the LLM provider's actual response, and whether ollama-cloud was rejecting an unknown model. All of that was a red herring.
+
+**Root cause:** The 302 is the **gated dashboard's auth layer** intercepting the chat request before it ever reaches Ollama. The Mac app's main process spawns a hermes Python backend as a separate Node child process. That child inherits `process.env` but does NOT have the Mac app's main-process Electron session's OAuth cookies. The dashboard returns 302 → login. The actual `OLLAMA_API_KEY` is fine.
+
+**Fix:** None applied — fix is a design call (option 1: switch to local mode, option 2: forward auth headers, option 3: renderer-side chat via IPC). Documented in `tasks/todo.md`.
+
+**Prevention rule:** When a 3xx error message appears on the user-visible surface, **trace the error string to its source first** (grep the codebase for the format), then follow the HTTP chain. Don't jump to "the most familiar component is broken" — the 302 came from a different layer entirely (dashboard auth, not LLM). Also: when the error string has a `:` with empty body (like `API server returned 302:`), that often means the server returned a redirect with no body — almost always an auth issue, not a payload issue.

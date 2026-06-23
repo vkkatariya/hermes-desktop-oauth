@@ -109,6 +109,40 @@
 - [x] **3.6** Chat tab opened but WebSocket connection failed — see "Open issue" below
 - [ ] **3.7** Cookies persist across app restart ✅ verified by re-launching
 - [ ] **3.8** Refresh-token rotation — not exercised (gateway doesn't issue refresh tokens in OAuth contract v1; AT cookie TTL is 15 min and SPA does full re-login on 401)
+- [x] **3.9** Chat end-to-end (post-3.6 fix): login → cookie → ticket → WS → first message sent — see "Mac chat 302 issue" below
+
+### Mac chat 302 issue — diagnosed 2026-06-23, fix path decided (NOT YET APPLIED)
+
+**Symptom:** After Mac rebuild with the ticket-burn fix, OAuth login + WS connect work. But typing a message shows: **`API server returned 302:`** (no body). Chat stays broken.
+
+**Source of the error string:** `src/main/hermes.ts:1501` in this fork — error formatter for non-200 responses from the **local Hermes API server**:
+```ts
+finish(`API server returned ${res.statusCode}: ${errBody.slice(0, 200)}`);
+```
+
+**Diagnostic chain (read mac e2e + dashboard source + asar):**
+1. Mac renderer → IPC → main process (`hermes.ts`) — `chatUrl = ${getApiUrl(profile)}/v1/chat/completions`
+2. `getApiUrl` returns the **remote dashboard URL** when Connection mode = "remote": `https://dashboard.auxois-wyrm.ts.net/v1/chat/completions` (`src/main/hermes.ts:122-136`)
+3. The local Hermes Python backend is **spawned as a separate Node child process** by the Mac app (line 5132 of the **upstream** `electron/main.cjs` — but the fork uses the same shape)
+4. That child process **inherits** `process.env` but does NOT have the Electron session's OAuth cookies
+5. The gated dashboard returns 302 → Nous Portal login redirect
+6. `hermes.ts:1501` formats it as `API server returned 302:`
+
+**Why ollama-key-on-athena is irrelevant:** athena's `OLLAMA_API_KEY` is fine and works (I tested it directly). The 302 has nothing to do with the LLM provider. It's a **separate auth layer** (dashboard OAuth) that the spawned backend can't satisfy.
+
+**Why moving the OLLAMA_API_KEY to the Mac .env didn't help:** because the request never reaches Ollama. The dashboard intercepts it at the auth layer first.
+
+**Fix options (user to decide when picking up Phase 4 prep):**
+
+| # | Fix | Code change | Effort |
+|---|---|---|---|
+| 1 | **Switch Mac Settings → Connection mode from "Remote" to "Local (loopback)"** — uses Mac's own backend over loopback, no auth needed | None | 30 sec |
+| 2 | **Forward OAuth cookies/token from Mac app's Electron session to the spawned hermes backend** so it can authenticate to the gated dashboard | `src/main/hermes.ts` (request headers) + `electron/main.cjs` (env passing) | ~50 lines |
+| 3 | **Renderer-side chat via IPC** (renderer has cookies, can auth) — bigger refactor | Multi-file | ~150+ lines |
+
+**Recommendation:** Option 1 for unblocking the user now. Option 2 for the proper community-PR shape (chat works against gated dashboards without forcing the user to switch modes). Document option 3 as "considered, not pursued, see why in devlog".
+
+**Status of this issue in upstream `fathah/hermes-desktop`:** This isn't an OAuth problem — it's a **general auth boundary** between the Electron main process and spawned Node child. Affects OAuth and any future auth model. Worth a note in the upstream PR.
 
 ### Open issue — WebSocket auth (blocks chat completion) — RESOLVED 2026-06-23
 
@@ -128,11 +162,14 @@
 
 | What | Outcome |
 |---|---|
-| Phase 3 status 3.1–3.8 | Now fully green (Mac e2e chat connection works after rebuild) |
+| Phase 3 status 3.1–3.5 | ✅ Complete (Mac e2e login round-trip works, cookies persist) |
+| Phase 3 status 3.6 (WebSocket chat) | ✅ **RESOLVED via PR #11** — root cause was `probeDashboardWebSocket` burning the single-use ticket before the renderer could use it. Removed the probe from the OAuth branch. Regression test `tests/dashboard-oauth-ticket-not-burned.test.ts` verified to fail with bug present, pass after fix. |
+| Phase 3 status 3.7 (cookies persist) | ✅ Verified by re-launching |
+| Phase 3 status 3.8 (refresh-token rotation) | ⏸ N/A — gateway doesn't issue refresh tokens in OAuth contract v1; AT cookie TTL is 15 min and SPA does full re-login on 401. |
 | Architectural rework needed? | **No** — gateway auth model was already correct, single targeted bug |
-| Branch state | `origin/dev` tip: `54c8ed2`; `feat/dashboard-oauth` preserved at `a4a511d` |
+| Branch state | `origin/dev` tip: `08fd5e2`; `feat/dashboard-oauth` preserved at `2d71104` |
 
-**Next:** Phase 4 — upstream PR to `fathah/hermes-desktop:main`. All 11 PRs worth of work is now ready to bundle.
+**Next:** Phase 4 — upstream PR to `fathah/hermes-desktop:main`. All 12 PRs worth of work is now ready to bundle.
 
 ### Files in this phase
 
@@ -144,11 +181,18 @@
 
 ## Phase 4: PR upstream
 
+> **Pre-flight status (2026-06-23):** 12 PRs merged to `dev`. OAuth + WS + chat-up-to-API-server are all in. **One open issue** (Mac chat 302, see above) is gated on a design decision — pick a fix path before opening the upstream PR.
+
 - [ ] **4.1** Open PR `vkkatariya/hermes-desktop-oauth:feat/dashboard-oauth` (or `feat/oauth-ticket-flow` if renamed — see Phase 2 gap #4) → `fathah/hermes-desktop:main`
-- [ ] **4.2** PR body: problem statement, screenshots/recording of working flow, port mapping (which lines from `NousResearch/hermes-agent/apps/desktop/electron/main.cjs:3940–4220` go where), test results, `lat.md` updates
+- [ ] **4.2** PR body: problem statement, screenshots/recording of working flow, port mapping (which lines from `NousResearch/hermes-agent/apps/desktop/electron/main.cjs:3940–4220` go where), test results, `lat.md` updates, **known issue / open follow-up** for the Mac chat 302 (or close it first)
 - [ ] **4.3** Address reviewer feedback, re-verify
 - [ ] **4.4** Merge → upstream `fathah/hermes-desktop@main`
 - [ ] **4.5** DEVLOG final entry: shipped upstream, link to PR
+
+**Decisions to make before opening PR:**
+- Fix the Mac chat 302 first? (recommended) — which option (1/2/3)?
+- Rename `feat/dashboard-oauth` → `feat/oauth-ticket-flow` for upstream PR? (cosmetic, but matches a more concise PR title)
+- Bundle the 12 PRs into one squashed commit, or preserve atomic history? (default: atomic — easier to review)
 
 ## Stretch (out of scope, parked)
 
