@@ -7,26 +7,28 @@
 
 This project runs two long-lived Claude Code sessions:
 
-- **`[hermes-desktop-oauth]-local`** (athena tmux, primary dev/design/edit) — branch convention: do work on `claude/local` (or sub-branches off it, e.g. `feat/<task>`)
-- **`[hermes-desktop-oauth]-cloud`** (Anthropic container, heavy `pnpm install`/Vitest/Playwright/build/audit) — branch convention: do work on `claude/cloud` (or sub-branches off it)
+- **`[hermes-desktop-oauth]-local`** (athena tmux, primary dev/design/edit)
+  - Process: Claude CLI on athena, started with `claude --remote-control '[hermes-desktop-oauth]-local'`
+  - Branch: `claude/local` (work on `feat/<task>` sub-branches off it)
+  - Filesystem: full local access (athena's `/home/radxa/...`, Docker, etc.)
+  - Use for: design iteration, file edits, debugging, dev workflow, anything needing local FS
+- **`[hermes-desktop-oauth]-cloud`** (Anthropic cloud container, heavy `pnpm install`/Vitest/Playwright/build/audit)
+  - Process: started from https://claude.ai/code → Code tab → New session → pick repo → pick branch `claude/cloud`
+  - Branch: `claude/cloud` (work on `feat/<task>-cloud` sub-branches off it)
+  - Filesystem: **ONLY the GitHub repo** (no `~/dev-shared/`, no Docker, no `.env.local`, no local servers)
+  - Use for: `pnpm install`, `pnpm test`, `pnpm run build`, full e2e audit, anything needing CPU isolation
 
-**Branch discipline:** `claude/local` and `claude/cloud` are lineage markers for each session's work. Both merge into `main`. Don't write directly to `main`. One session works at a time, or use sub-branches if parallel work is needed:
-
+**One-time setup** (run on first session per project, on athena):
 ```bash
-# Local session
-git checkout claude/local
-git checkout -b feat/<task>   # work branch off claude/local
-# ... do work, commit, push ...
-# When done: merge feat/<task> → claude/local → main
-
-# Cloud session
-git checkout claude/cloud
-git checkout -b feat/<task>-cloud   # work branch off claude/cloud
-# ... do work, commit, push ...
-# When done: merge feat/<task>-cloud → claude/cloud → main
+cd ~/dev-shared/projects/hermes-desktop-oauth
+git branch claude/local main
+git branch claude/cloud main
+git push origin claude/local claude/cloud
 ```
 
-**Cross-session handoff:** read top 3 of `tasks/DEVLOG.md` on every resume — cloud/local sessions log start/end markers there. Use cloud for `pnpm install`, `pnpm test`, `pnpm run build`, full e2e audit; use local for code edits, debugging, dev workflow.
+**How to start the cloud session:** open https://claude.ai/code → Code tab → New session → pick repo → pick branch `claude/cloud` → rename to `[hermes-desktop-oauth]-cloud`. NOT from the CLI — `claude --remote-control` is a relay, not a cloud container.
+
+**Cross-session handoff:** read top 3 of `tasks/DEVLOG.md` on every resume — cloud/local sessions log start/end markers there. Coordination also via git branches and PRs.
 
 **The actual `/remote-control` command** (not `/rc` — that's hallucinated).
 
