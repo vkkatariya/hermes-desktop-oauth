@@ -3,34 +3,30 @@
 - Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
 - Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
 
-## Session model (dual-session, see `workflow/SESSION-WORKFLOW.md` v2)
+## Session model (dual session, no lineage branches)
 
-This project runs two long-lived Claude Code sessions:
+This project uses **two ways to run Claude Code** (see `workflow/SESSION-WORKFLOW.md` v3):
 
-- **`[hermes-desktop-oauth]-local`** (athena tmux, primary dev/design/edit)
+- **Local session** (this is normally the one you are): `[hermes-desktop-oauth]-local`
+  - Host: athena tmux
   - Process: Claude CLI on athena, started with `claude --remote-control '[hermes-desktop-oauth]-local'`
-  - Branch: `claude/local` (work on `feat/<task>` sub-branches off it)
+  - Branch: whatever the working dir has checked out (work on `feat/<task>` sub-branches off `dev` or `main`)
   - Filesystem: full local access (athena's `/home/radxa/...`, Docker, etc.)
-  - Use for: design iteration, file edits, debugging, dev workflow, anything needing local FS
-- **`[hermes-desktop-oauth]-cloud`** (Anthropic cloud container, heavy `pnpm install`/Vitest/Playwright/build/audit)
-  - Process: started from https://claude.ai/code → Code tab → New session → pick repo → pick branch `claude/cloud`
-  - Branch: `claude/cloud` (work on `feat/<task>-cloud` sub-branches off it)
+  - Use for: design iteration, file edits, debugging, dev server, anything needing local FS, deploys
+- **Cloud session** (ephemeral, for heavy work): `[hermes-desktop-oauth]-cloud`
+  - Host: Anthropic cloud container (NOT your machine)
+  - Process: started from https://claude.ai/code → Code tab → New session → pick repo → pick the sub-branch the local session is working on
+  - Branch: same as the local session (both share the working dir on the repo; no separate lineage branches)
   - Filesystem: **ONLY the GitHub repo** (no `~/dev-shared/`, no Docker, no `.env.local`, no local servers)
-  - Use for: `pnpm install`, `pnpm test`, `pnpm run build`, full e2e audit, anything needing CPU isolation
+  - Use for: `pnpm install` / `npm install`, Playwright runs, full builds, audits, anything needing CPU isolation
+  - **Cannot do:** `vercel deploy` (no auth), access local servers, run Docker, see homelab configs
 
-**One-time setup** (run on first session per project, on athena):
-```bash
-cd ~/dev-shared/projects/hermes-desktop-oauth
-git branch claude/local main
-git branch claude/cloud main
-git push origin claude/local claude/cloud
-```
+**No branch setup needed.** Both sessions share `dev` (or `main`) and work on `feat/<task>` sub-branches directly. There are no `claude/local` / `claude/cloud` lineage branches — that pattern was tried and removed (see L-069 in `tasks/lessons.md`).
 
-**How to start the cloud session:** open https://claude.ai/code → Code tab → New session → pick repo → pick branch `claude/cloud` → rename to `[hermes-desktop-oauth]-cloud`. NOT from the CLI — `claude --remote-control` is a relay, not a cloud container.
+**How to start the cloud session:** open https://claude.ai/code → Code tab → New session → pick the repo → pick the sub-branch the local session is working on → rename to `[hermes-desktop-oauth]-cloud`. The cloud session spins up in an Anthropic container with a fresh clone.
 
-**Cross-session handoff:** read top 3 of `tasks/DEVLOG.md` on every resume — cloud/local sessions log start/end markers there. Coordination also via git branches and PRs.
+**Cross-session coordination:** via git (both sessions commit to the same repo) and `tasks/DEVLOG.md` (the local session writes; the cloud session reads if it needs context, writes if it does heavy work). Cloud session work is committed to whatever sub-branch it's working on, then merged via PR like any other contribution.
 
-**The actual `/remote-control` command** (not `/rc` — that's hallucinated).
 
 # Post-task checklist (REQUIRED — do not skip)
 
