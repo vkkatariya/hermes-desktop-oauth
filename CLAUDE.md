@@ -3,6 +3,24 @@
 - Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
 - Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
 
+## Session model (dual-session, see `workflow/SESSION-WORKFLOW.md` v2)
+
+This project runs two long-lived Claude Code sessions:
+
+- **`[hermes-desktop-oauth]-local`** (athena tmux, primary dev/design/edit) on worktree `../hermes-desktop-oauth.claude-local`, branch `claude/local`
+- **`[hermes-desktop-oauth]-cloud`** (Anthropic container, heavy `pnpm install`/Vitest/Playwright/build/audit) on worktree `../hermes-desktop-oauth.claude-cloud`, branch `claude/cloud`
+
+**One-time setup** (run on first session per machine):
+```bash
+cd ~/dev-shared/projects/hermes-desktop-oauth
+git worktree add ../hermes-desktop-oauth.claude-local -b claude/local dev
+git worktree add ../hermes-desktop-oauth.claude-cloud -b claude/cloud dev
+```
+
+**Cross-session handoff:** read top 3 of `tasks/DEVLOG.md` on every resume — cloud/local sessions log start/end markers there. Use cloud for `pnpm install`, `pnpm test`, `pnpm run build`, full e2e audit; use local for code edits, debugging, dev workflow.
+
+**The actual `/remote-control` command** (not `/rc` — that's hallucinated).
+
 # Post-task checklist (REQUIRED — do not skip)
 
 After EVERY task, before responding to the user:
