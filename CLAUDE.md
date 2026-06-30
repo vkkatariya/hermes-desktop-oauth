@@ -7,14 +7,23 @@
 
 This project runs two long-lived Claude Code sessions:
 
-- **`[hermes-desktop-oauth]-local`** (athena tmux, primary dev/design/edit) on worktree `../hermes-desktop-oauth.claude-local`, branch `claude/local`
-- **`[hermes-desktop-oauth]-cloud`** (Anthropic container, heavy `pnpm install`/Vitest/Playwright/build/audit) on worktree `../hermes-desktop-oauth.claude-cloud`, branch `claude/cloud`
+- **`[hermes-desktop-oauth]-local`** (athena tmux, primary dev/design/edit) — branch convention: do work on `claude/local` (or sub-branches off it, e.g. `feat/<task>`)
+- **`[hermes-desktop-oauth]-cloud`** (Anthropic container, heavy `pnpm install`/Vitest/Playwright/build/audit) — branch convention: do work on `claude/cloud` (or sub-branches off it)
 
-**One-time setup** (run on first session per machine):
+**Branch discipline:** `claude/local` and `claude/cloud` are lineage markers for each session's work. Both merge into `main`. Don't write directly to `main`. One session works at a time, or use sub-branches if parallel work is needed:
+
 ```bash
-cd ~/dev-shared/projects/hermes-desktop-oauth
-git worktree add ../hermes-desktop-oauth.claude-local -b claude/local dev
-git worktree add ../hermes-desktop-oauth.claude-cloud -b claude/cloud dev
+# Local session
+git checkout claude/local
+git checkout -b feat/<task>   # work branch off claude/local
+# ... do work, commit, push ...
+# When done: merge feat/<task> → claude/local → main
+
+# Cloud session
+git checkout claude/cloud
+git checkout -b feat/<task>-cloud   # work branch off claude/cloud
+# ... do work, commit, push ...
+# When done: merge feat/<task>-cloud → claude/cloud → main
 ```
 
 **Cross-session handoff:** read top 3 of `tasks/DEVLOG.md` on every resume — cloud/local sessions log start/end markers there. Use cloud for `pnpm install`, `pnpm test`, `pnpm run build`, full e2e audit; use local for code edits, debugging, dev workflow.
