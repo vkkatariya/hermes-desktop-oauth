@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-11-02 · Claude Code (local) · chore(ci): add DEVLOG check job
+
+**Mode:** Builder
+
+**Did:** added the `devlog` job to `.github/workflows/ci.yml`, pasted from `workflow/agents_workflow/enforcement/ci-devlog-job.yml`. It fails a pull request that does not change `tasks/DEVLOG.md`. It is the backstop for `--no-verify` and cloud sessions.
+
+**Config change:** file `.github/workflows/ci.yml`; old: no `devlog` job; new: `devlog` job, runs on `pull_request` only; rollback: `git revert e5ec620`.
+
+**State:** branch `agent/claude-code-config-ci-devlog`, PR open against `main`, not merged.
+
 ## 2026-06-22 init — Hermes project-init skill
 
 **Did:** Forked `fathah/hermes-desktop` → `vkkatariya/hermes-desktop-oauth`; cloned fork to athena at `/home/radxa/dev-shared/projects/hermes-desktop-oauth/`; surveyed upstream's existing project skeleton (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, lat.md/, electron-builder.yml, .github/workflows/ci.yml, src/main/{hermes-auth,dashboard,ipc/register}.ts); detected non-vanilla setup — upstream uses `lat.md` knowledge graph + husky + eslint + vitest + electron-vite; chose "partial setup" variant of project-init per skill guidance.

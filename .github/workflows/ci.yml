@@ -42,3 +42,18 @@ jobs:
       - name: Lint
         run: npm run lint
         continue-on-error: true
+
+  # DEVLOG check: backstop for --no-verify and cloud sessions (AGENTS-WORKFLOW section 7).
+  devlog:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: DEVLOG touched
+        run: |
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -qx 'tasks/DEVLOG.md' || {
+            echo "::error::Add a DEVLOG entry at the top of tasks/DEVLOG.md (format: AGENTS-WORKFLOW section 7)."
+            exit 1
+          }
